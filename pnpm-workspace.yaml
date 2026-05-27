@@ -4,6 +4,9 @@ packages:
 
 allowBuilds:
   esbuild: true
+  '@parcel/watcher': true
+  '@swc/core': true
+  sharp: true
   cpu-features: false
   protobufjs: false
   ssh2: false
