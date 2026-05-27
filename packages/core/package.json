@@ -1,0 +1,38 @@
+{
+  "name": "@benkyou/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./db": "./src/db/index.ts",
+    "./db/migrate": "./src/db/migrate.ts",
+    "./ai": "./src/ai/index.ts",
+    "./queue": "./src/queue/boss.ts",
+    "./config": "./src/config/env.ts"
+  },
+  "scripts": {
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ai": "^6.0.0",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.0",
+    "drizzle-orm": "^0.45.0",
+    "postgres": "^3.4.9",
+    "pg-boss": "^12.18.0",
+    "zod": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "drizzle-kit": "^0.31.0",
+    "vitest": "^4.0.0",
+    "testcontainers": "^12.0.0"
+  }
+}
