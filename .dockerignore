@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+build
+coverage
+pgdata
+.superpowers
+.git
+.github
+.env
+.env.*
+!.env.example
+docs
+*.md

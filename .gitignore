@@ -2,37 +2,44 @@
 node_modules/
 .pnpm-store/
 
-# Build
+# Build output
 .next/
+next-env.d.ts
 dist/
 build/
 out/
+.turbo/
+*.tsbuildinfo
 
-# Env
+# Local pg volume
+pgdata/
+
+# Brainstorm visual companion (not source-tracked)
+.superpowers/
+
+# Env files
 .env
 .env.local
 .env.*.local
 !.env.example
-
-# DB
-pgdata/
 
 # Logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
 
-# OS
-.DS_Store
-Thumbs.db
+# Test artifacts
+coverage/
+.vitest-cache/
+playwright-report/
+test-results/
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
 *.swp
 
-# Superpowers (会话 scratch，不进仓库)
-.superpowers/
-
-# Claude Code 本地配置
+# Claude Code local settings
 .claude/settings.local.json

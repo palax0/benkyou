@@ -34,12 +34,12 @@ Benkyou 是一个开源、自部署的个人 AI 资讯聚合平台，目标是**
 
 ## 2. 设计原则 · Principles
 
-1. **Self-host first**：用户能 `git clone` + `docker compose up` 跑起来；无需注册任何 SaaS 账号
-2. **Bring-your-own AI**：所有 LLM / embedding / 转写都通过 OpenAI 兼容协议接入，用户可自由选 Claude / OpenAI / DeepSeek / 本地 Ollama
-3. **单一数据库**：PostgreSQL + pgvector 承担关系数据、向量、全文检索、任务队列四种角色
-4. **代码复用**：App（Next.js）和 Worker（Node 进程）共享一个 `packages/core` 业务逻辑库
-5. **双部署形态**：同一份代码既能跑 Docker Compose（长跑 worker），又能跑 Vercel + Supabase（cron 触发 serverless）
-6. **YAGNI**：当前不为"多用户/个性化推荐/浏览器扩展"等后期功能预留任何字段或抽象
+1. **Self-host first**：核心应用（web + worker + postgres）完全自部署，无强制 SaaS 依赖。AI 能力是开箱条件：用户必须提供 LLM endpoint（可选 SaaS 如 Anthropic / OpenAI / DeepSeek，或完全本地 Ollama）。embedding 同理。视频转写如果走"无字幕路径"还需要 Whisper 兼容 endpoint（也可本地化部署 faster-whisper 等）。
+2. **Bring-your-own AI（多 provider 适配）**：LLM 与 embedding 通过 [Vercel AI SDK](https://sdk.vercel.dev/) 抽象，原生支持 Anthropic / OpenAI / Google / DeepSeek / Ollama 等多家 API（不强求 OpenAI Chat Completions 兼容）。Whisper 走 OpenAI Whisper-API 兼容协议。
+3. **单一数据库**：PostgreSQL + pgvector 承担关系数据、向量、全文检索、任务队列四种角色。
+4. **代码复用**：App（Next.js）和 Worker（Node 进程）共享一个 `packages/core` 业务逻辑库。
+5. **双部署形态**：同一份代码既能跑 Docker Compose（长跑 worker），又能跑 Vercel + Supabase（cron 触发 serverless）。
+6. **YAGNI**：当前不为"多用户/个性化推荐/浏览器扩展"等后期功能预留任何字段或抽象。
 
 ---
 
@@ -66,7 +66,7 @@ Benkyou 是一个开源、自部署的个人 AI 资讯聚合平台，目标是**
 - 完整 Feed 浏览（筛选、无限滚动）
 - 统一收藏夹（订阅 + 手动粘贴内容共用）
 - 临时 URL 粘贴处理（文章 / 视频）
-- 语义搜索（混合 BM25 + 向量 + 质量重排）
+- 语义搜索（混合"全文检索 (PG ts_rank) + 向量 + 质量重排"）
 - Q&A Agent（独立 `/chat` 页 + 右下浮动球抽屉双形态，共享对话历史）
 - 来源管理 UI
 - 用户设置 UI（LLM endpoint、兴趣标签、来源权重、密码）
@@ -89,7 +89,7 @@ Benkyou 是一个开源、自部署的个人 AI 资讯聚合平台，目标是**
 ### 3.4 非目标 · Non-Goals（明确不做）
 
 - 多用户 / 多租户
-- 自训模型（全部依赖外部 endpoint）
+- 全部依赖外部或本地推理 endpoint（不自训模型）
 - 笔记 / 标注 / 高亮（不重做 Readwise）
 - 社交分享 / 评论
 - 离线模式
@@ -116,7 +116,7 @@ benkyou/
 │   └── core/                   # 共享业务逻辑库
 │       ├── db/                 # Drizzle ORM schema + 迁移
 │       ├── sources/            # 源适配器（rss / hn / reddit / youtube / bilibili / adhoc）
-│       ├── ai/                 # LLM / embedding / whisper 客户端封装
+│       ├── ai/                 # LLM/embedding 走 Vercel AI SDK; Whisper 自封装 OpenAI-API 兼容客户端
 │       ├── pipeline/           # 6 个 stage 的处理函数
 │       ├── search/             # 混合检索 + RRF + 重排
 │       ├── agent/              # Tool 定义 + 调度
@@ -147,7 +147,7 @@ benkyou/
 │ - 业务数据                │◄──►│   - 长跑 / cron 触发模式    │
 │ - pg-boss 任务表          │    │   - 拉源 / 处理 pipeline    │
 │ - embeddings              │    │   - import packages/core/*  │
-│ - tsvector BM25 索引      │    └──────────────────────────────┘
+│ - tsvector ts_rank 索引      │    └──────────────────────────────┘
 └──────────────────────────┘
 ```
 
@@ -164,7 +164,7 @@ benkyou/
        │
        ├─→ 进入 feed (默认 published_at DESC; 可切"智能排序"用 final_score)
        ├─→ 被日报候选 (每日 cron 选 top-N per category)
-       ├─→ 可被搜索 (BM25 + vector index)
+       ├─→ 可被搜索 (ts_rank + vector index)
        └─→ 可被 Agent 工具调用 (search_items, multi_doc_summarize, ...)
 
 注: feed / 日报 / search / agent 工具的所有查询都加 `state = 'done'` 过滤；
@@ -187,17 +187,19 @@ user_settings
   id                int primary key default 1
   password_hash     text not null               -- argon2id
   locale            text not null default 'zh'  -- zh | en
-  -- LLM
-  llm_base_url      text
-  llm_api_key       text                         -- 注：自部署明文存可接受
+  -- LLM (via Vercel AI SDK)
+  llm_provider      text                         -- 'anthropic'|'openai'|'openai-compatible'|'google'|'mistral'|'ollama'|...
+  llm_base_url      text                         -- 仅 provider ∈ {openai-compatible, ollama, ...} 时填
+  llm_api_key       text                         -- 自部署明文存可接受；不需要时留空（如 ollama 本地）
   llm_model         text
   llm_cheap_model   text                         -- 用于评分等高频低需求场景
-  -- embedding
+  -- embedding (via Vercel AI SDK)
+  embed_provider    text
   embed_base_url    text
   embed_api_key     text
   embed_model       text
-  embed_dim         int default 768            -- 必须匹配 embed_model 实际输出维度
-  -- whisper (可选)
+  embed_dim         int not null                 -- 在迁移期 freeze，UI 只读；切换需运行维护脚本
+  -- whisper (可选, OpenAI Whisper-API 兼容)
   whisper_base_url  text
   whisper_api_key   text
   whisper_model     text
@@ -209,6 +211,8 @@ user_settings
   digest_count      int default 5                -- 日报每类条数
   video_auto_limit  int default 1800             -- 自动转写上限（秒）
   video_manual_limit int default 10800           -- 手动转写上限（秒）
+  adhoc_source_weight numeric default 1.0        -- 手动粘贴（source_id IS NULL）默认权重，用于 final_score
+  pipeline_max_attempts int default 3            -- 单 stage 最大重试次数
   updated_at        timestamptz default now()
 ```
 
@@ -243,11 +247,13 @@ items
   source_id       uuid references sources(id) on delete set null  -- null = 临时粘贴
   external_id     text                                              -- 源内唯一 id (RSS guid / HN id 等)
   url             text not null
+  url_hash        text not null                                    -- sha256(normalize(url))，全局去重锚
   title           text not null
   author          text
   published_at    timestamptz
   content_type    text not null                                    -- 'article' | 'video' | 'discussion' | 'paper'
   raw_content     text                                             -- 正文 / 字幕 / 转写
+  transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'unavailable'
   transcript_segments jsonb                                        -- 视频说话人分段（如果可用）
   video_duration  int                                              -- 秒，仅视频
   video_kind      text                                             -- 'auto' | 'interview' | 'tutorial' | 'talk' | 'other'
@@ -259,8 +265,10 @@ items
   topic_score     numeric                                           -- 0~1, A 与用户兴趣的匹配度
   category        text                                              -- 'news' | 'knowledge'
   cluster_id      uuid references event_clusters(id) on delete set null
-  state           text not null default 'pending'                   -- pending|extracted|embedded|scored|dedup_done|done|failed:<stage>
-  last_error      text
+  state           text not null default 'pending'                   -- 见下方状态机说明
+  current_stage   text                                              -- 当前正在处理或下一个要处理的 stage
+  attempts        int not null default 0                            -- 当前 stage 已尝试次数
+  last_error      text                                              -- 最近一次失败的错误信息
   bookmarked      bool default false
   bookmarked_at   timestamptz
   ingested_at     timestamptz default now()
@@ -270,10 +278,20 @@ items
                     setweight(to_tsvector('simple', coalesce(raw_content,'')), 'C')
                   ) stored
 
-  unique (source_id, external_id)
+  unique (url_hash)                                                 -- 全局唯一，覆盖手动粘贴与无 GUID feed
+  unique (source_id, external_id)                                   -- 当二者均 NOT NULL 时的快速去重（部分索引在下方）
+
+-- 状态机说明
+-- state 取值: 'pending' | 'extracted' | 'embedded' | 'scored' | 'dedup_done' | 'done' | 'failed'
+-- 任务执行中失败 → 仅写 attempts++ 和 last_error，state 不动；
+-- pg-boss 自动 backoff 重试，直到 attempts 达到 user_settings.pipeline_max_attempts 后由 onFail 回调置 state='failed'，
+-- current_stage 记录卡在哪一步，便于 /admin/jobs 重试。
+-- 用户可见查询过滤 state = 'done'。
 
 -- 索引
 create index items_state_idx on items(state);
+create unique index items_source_ext_uq on items(source_id, external_id)
+  where source_id is not null and external_id is not null;
 create index items_published_idx on items(published_at desc);
 create index items_source_idx on items(source_id);
 create index items_bookmarked_idx on items(bookmarked) where bookmarked = true;
@@ -281,20 +299,22 @@ create index items_search_vec_idx on items using gin(search_vec);
 
 item_embeddings
   item_id       uuid primary key references items(id) on delete cascade
-  embedding     vector(768)         -- 主体（标题 + 内容截断）
-  title_emb     vector(768)         -- 标题，用于 dedup 聚类
-  model_id      text                -- 记录用哪个模型生成，便于切换
+  embedding     vector($EMBED_DIM)  -- 维度在迁移期由 .env / user_settings.embed_dim 决定，并写死到 schema
+  title_emb     vector($EMBED_DIM)  -- 同 embedding
+  model_id      text                -- 记录用哪个模型生成
 
 create index item_emb_hnsw on item_embeddings using hnsw (embedding vector_cosine_ops);
 create index title_emb_hnsw on item_embeddings using hnsw (title_emb vector_cosine_ops);
 ```
+
+> **关于 embedding 维度**：`vector(N)` 在 pgvector 中是 hard-coded 类型参数，不能"动态 N"。因此 `embed_dim` 在**首次初始化迁移时**确定，写进 schema migration 模板。用户**一旦选定后不能在 UI 里改**；若要切换到不同维度的 model，必须运行维护脚本 `pnpm tsx scripts/migrate-embeddings.ts --new-dim=N`：drop `item_embeddings` 表 → 用新维度 recreate → 触发全量 re-embedding（自动以 batch 的方式跑）。设置页面对 `embed_dim` 字段显示只读 + warning + "运行维护脚本"链接说明。
 
 ### 5.4 聚类与日报
 
 ```sql
 event_clusters
   id              uuid primary key default gen_random_uuid()
-  canonical_item  uuid references items(id) on delete cascade
+  canonical_item  uuid references items(id) on delete set null      -- 删除 canonical 时 set null，dedup 下一轮重选
   keywords        text[]
   first_seen_at   timestamptz default now()
   last_updated_at timestamptz default now()
@@ -358,12 +378,14 @@ ingest → extract → embed → score → dedup → summary → (done)
 - 定时拉取：每个 source 按 `poll_interval` 周期，pg-boss schedule 触发 `ingest:<source_id>` 任务
 - 用户粘贴 URL：API 接收 → 创建 item（state=pending）→ 直接入队 `extract` 任务（跳过 ingest）
 
-**失败处理**：
+**失败处理（关键：重试期间状态不变）**：
 
-- 每个 stage 失败 → `state = 'failed:<stage>'`，`last_error` 记录原因
-- pg-boss 按 exponential backoff 重试 3 次
-- 3 次后仍失败 → 进入"管理员可见的失败列表"
-- UI `/admin/jobs` 提供"从当前 state 重试"按钮
+- 每个 stage 任务进入 worker 时：`current_stage` 写入要处理的 stage 名；`attempts++`
+- 任务抛错 → 仅写 `last_error`；**不立刻**修改 `state`；pg-boss 自动 exponential backoff
+- pg-boss 重试到 `user_settings.pipeline_max_attempts`（默认 3）次仍失败 → 在 `onFail` 回调中：将 `state` 置为 `'failed'`，`current_stage` 保留为卡住的 stage
+- 任务成功 → state 推进到下一档（如 `extracted`），`attempts = 0`，`current_stage` 设为下一 stage
+- `/admin/jobs` 列出所有 `state='failed'` 的 item，支持"从 current_stage 重试"按钮，重置 attempts 后重新入队
+- 用户可见查询统一过滤 `state = 'done'`；`failed` / 中间态对普通用户不可见
 
 ### 6.2 各 stage 详情
 
@@ -381,7 +403,11 @@ ingest → extract → embed → score → dedup → summary → (done)
 - **HN/Reddit**（v2）：调官方 JSON API 拿 story + 前 N 个评论
 - **YouTube**：先调字幕 API；有字幕直接存入 `raw_content`，并尝试解析说话人（若 API 提供）
 - **Bilibili**：调 Bilibili 字幕 API（公开）
-- **视频无字幕**：检查 `video_duration` 与上限（自动: 30 min；手动且 user_confirmed: 3 hr）；超限标记为 `transcript_too_long` 不转写；不超限入队 `transcribe:item_id` 子任务
+- **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。再判断转写策略：
+  - 自动源 + `duration > video_auto_limit` → `transcript_status='skipped_too_long'`，`raw_content=null`，**继续后续 pipeline**（embed/score 只用 title + metadata；UI 显示"未转写"badge，用户可手动批准）
+  - 手动粘贴 + `duration > video_manual_limit` → 拒绝粘贴，前端报错"超过上限，请缩短或在设置里上调上限"
+  - 手动粘贴 + `duration > video_auto_limit` 但 `< video_manual_limit` → 前端展示预估成本，用户勾选"确认转写成本"后才入队 `transcribe`
+  - 其他情况 → 入队 `transcribe:item_id` 子任务（`transcript_status='pending'`）
 - **临时粘贴 URL**：识别是否为视频域名，分别走视频/文章路径
 
 `transcribe` 子任务：
@@ -390,6 +416,7 @@ ingest → extract → embed → score → dedup → summary → (done)
 - `Promise.all` 并发调 Whisper endpoint
 - 合并 transcripts，处理 chunk 边界（用 overlap 内的相似度对齐）
 - 若 endpoint 返回 speaker labels（如 Deepgram），存入 `transcript_segments` jsonb；否则 `raw_content` 存纯文本
+- 完成 → `transcript_status='present'`；失败超 max attempts → `transcript_status='unavailable'`（继续 embed/score 用 title）
 
 #### embed
 
@@ -410,10 +437,11 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 #### dedup
 
-- 用 `title_emb` 在过去 N 天（默认 7 天）内 cosine 相似度 > 阈值（默认 0.85）查
-- 命中 → 加入对方 cluster；选权重最高（`sources.weight`）的作为 `canonical_item`
+- 用 `title_emb` 在过去 N 天（默认 7 天）内 cosine 相似度 > 阈值（默认 0.85）查（HNSW 索引）
+- 命中 → 加入对方 cluster；按 `effective_weight = COALESCE(sources.weight, user_settings.adhoc_source_weight)` 重选 `canonical_item`
 - 未命中 → 新建 cluster
 - 更新 `event_clusters.item_count` 与 `last_updated_at`
+- 当 canonical_item 被删除（`ON DELETE SET NULL`）时，下一次 dedup 任务进入这个 cluster 触发时会自动 re-elect canonical
 
 #### summary
 
@@ -432,12 +460,14 @@ ingest → extract → embed → score → dedup → summary → (done)
 每天定时（默认本地时间 08:00）触发 `digest:generate` 任务：
 
 1. 查询过去 24 小时（或上次日报后） `state='done'` 的 items
-2. 用 `final_score = α·topic_score + β·depth_score + γ·source.weight` 排序（α/β/γ 复用 `user_settings.weight_*`）
+2. 用 `final_score = α·topic_score + β·depth_score + γ·effective_weight` 排序，其中
+   `effective_weight = COALESCE(sources.weight, user_settings.adhoc_source_weight)`，
+   α/β/γ 复用 `user_settings.weight_*`
 3. 按 `category` 分组，各取 top `digest_count`（默认 5）
 4. 用 LLM 生成 intro 段落（简介今日要点） + 每条的入选理由
 5. 写入 `digests` + `digest_items`
 
-> 注：search 与 digest 用同一组 α/β/γ 权重；不同的是 α 在 search 时乘 `rrf_score`、在 digest 时乘 `topic_score`（因为 digest 没有用户 query）。如果未来希望两边独立调权重，再加 `digest_weight_*` 三列即可，schema 改动最小。
+> 注：search 与 digest 用同一组 α/β/γ 权重；不同的是 α 在 search 时乘 `rrf_score`、在 digest 时乘 `topic_score`（因为 digest 没有用户 query）。如果未来希望两边独立调权重，再加 `digest_weight_*` 三列即可，schema 改动最小。手动粘贴内容（`source_id IS NULL`）的权重统一用 `user_settings.adhoc_source_weight` 兜底。
 
 ---
 
@@ -445,25 +475,24 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 ### 7.1 混合检索流程
 
-输入：用户查询字符串 + 可选 filters。
+输入：用户查询字符串 + 可选 filters（category / source_type / date_range / bookmarked_only）。
 
-1. **并行两路查询**
-   - BM25：`SELECT id, ts_rank(search_vec, plainto_tsquery(...))` LIMIT 50
-   - 语义：`embed(query)` → `SELECT id, embedding <=> $vec` LIMIT 50
-2. **RRF 合并**
-   - `score = 1/(60 + rank_bm25) + 1/(60 + rank_vec)`
-   - 排序取前 30
-3. **质量重排**
-   - `final = α·rrf_score + β·depth_score + γ·source.weight`
-4. **应用 filters**（category / source_type / date_range / bookmarked_only）
+1. **filters 前置 + 并行两路查询**：用户提供的 filters 与"`state='done'`"一并作为 WHERE 条件**直接进入两路候选查询**，确保各自在筛选后的空间中召回 top 50：
+   - 全文检索：`SELECT id, ts_rank(search_vec, plainto_tsquery(...)) FROM items WHERE state='done' AND <filters> ORDER BY ts_rank DESC LIMIT 50`
+   - 向量：`embed(query)` → `SELECT id, embedding <=> $vec FROM items JOIN item_embeddings ... WHERE state='done' AND <filters> ORDER BY <=> ASC LIMIT 50`
+2. **RRF 合并**：`score = 1/(60 + rank_lex) + 1/(60 + rank_vec)`，排序取前 30
+3. **质量重排**：`final = α·rrf_score + β·depth_score + γ·effective_weight`（同 digest 公式的 `effective_weight` 处理）
+4. **防御性过滤**：极少数 edge case（如 RRF 后某 item 的 source 在筛选时刚好刚被禁用）→ 再过一遍 filter
 5. **返回 top 20** with `ts_headline` 高亮片段
 
 `α / β / γ` 取自 `user_settings`，前端有"权重调试"工具供高级用户调整。
 
+> **关于"全文检索"术语**：本设计使用 PostgreSQL 内建 `ts_rank`（基于词频 + 位置权重，**不是严格的 BM25**）。对绝大多数中英混合 AI 资讯场景已经够用。未来若需要严格 BM25，可换用 `pg_search` 扩展（社区维护）或将 lexical 路径外包到 Tantivy / Meilisearch；接口保持一致即可。
+
 ### 7.2 性能保障
 
 - HNSW 索引（pgvector 内建）：百万级 items 仍亚秒
-- BM25 GIN 索引：tsvector 上 GIN
+- GIN 索引在 `search_vec` 上
 - 全表 < 50 万条时，两路并行执行 < 100ms
 
 ---
@@ -500,23 +529,23 @@ get_user_context()  // 可选
 
 ### 8.2 调度循环
 
-标准 tool-use loop：
+通过 Vercel AI SDK 的 `streamText({ tools, ... })` 标准 tool-use loop——SDK 自动处理多轮工具调用 + 流式输出 + provider 差异：
 
+```ts
+const result = streamText({
+  model: providerModel,           // 用户配置的 LLM (Vercel AI SDK 抽象)
+  messages,
+  tools: TOOL_DEFINITIONS,
+  maxSteps: 5,                    // 最多 5 轮 tool-use 迭代防失控
+});
+
+for await (const chunk of result.fullStream) {
+  // chunk.type ∈ {text-delta, tool-call, tool-result, finish, error}
+  // 转发为 SSE 事件给前端
+}
 ```
-while not done:
-  response = llm.chat({
-    messages,
-    tools: TOOL_DEFINITIONS,
-    stream: true,
-  })
-  if response.tool_calls:
-    for tc in response.tool_calls:
-      result = await execute_tool(tc)
-      messages.push(tool_result_message(result))
-  else:
-    stream tokens to client
-    done = true
-```
+
+工具执行（`tools.execute`）内部直接调 `packages/core/search`、`packages/core/items` 等，无网络往返。
 
 ### 8.3 流式响应
 
@@ -695,32 +724,51 @@ DATABASE_URL=postgresql://benkyou:pass@postgres:5432/benkyou?sslmode=disable
 # 首次部署初始密码
 INITIAL_PASSWORD=              # 首次启动后置空
 
-# 默认 LLM（用户 UI 里可改）
-DEFAULT_LLM_BASE_URL=https://api.anthropic.com/v1
+# Embedding 维度（首次迁移时写入 schema，之后只能通过维护脚本变更）
+EMBED_DIM=1536
+
+# 以下默认值供首次 onboarding 预填表单使用；用户 UI 里可改。
+# .env 中留空也可以，留空时 onboarding 强制用户在 UI 里填。
+#
+# LLM 与 embedding 通过 Vercel AI SDK 调用，provider 字段决定走哪个适配器。
+# provider 可选: 'anthropic' | 'openai' | 'openai-compatible' | 'google' | 'mistral' | 'ollama' 等
+
+DEFAULT_LLM_PROVIDER=            # 例: anthropic | openai | openai-compatible | ollama
+DEFAULT_LLM_BASE_URL=            # provider=openai-compatible | ollama 时必填
 DEFAULT_LLM_API_KEY=
-DEFAULT_LLM_MODEL=claude-haiku-4-5-20251001
-DEFAULT_LLM_CHEAP_MODEL=claude-haiku-4-5-20251001
+DEFAULT_LLM_MODEL=               # 例: claude-haiku-4-5 / gpt-4.1-mini / qwen2.5:7b
+DEFAULT_LLM_CHEAP_MODEL=         # 用于 score / summary 等高频低需求场景
 
-# 默认 embedding
-DEFAULT_EMBED_BASE_URL=https://api.openai.com/v1
+DEFAULT_EMBED_PROVIDER=          # 例: openai | google | ollama | openai-compatible
+DEFAULT_EMBED_BASE_URL=
 DEFAULT_EMBED_API_KEY=
-DEFAULT_EMBED_MODEL=text-embedding-3-small
-DEFAULT_EMBED_DIM=768
+DEFAULT_EMBED_MODEL=             # 例: text-embedding-3-small / nomic-embed-text
 
-# 默认 whisper（可选）
-DEFAULT_WHISPER_BASE_URL=
+# Whisper-API 兼容 endpoint（可选；视频无字幕路径需要）
+DEFAULT_WHISPER_BASE_URL=        # 例: https://api.openai.com/v1 或 自托管 whisper-server
 DEFAULT_WHISPER_API_KEY=
-DEFAULT_WHISPER_MODEL=whisper-large-v3
+DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 ```
+
+> **重要**：模板里**不预填具体 SaaS 厂商默认值**，因为 BYO AI 是用户主动决策的事（涉及隐私、费用、合规）。文档（README）会给出 4 套推荐配置作为示例：① 纯 SaaS Claude+OpenAI / ② 国内 SaaS DeepSeek+智谱 / ③ 完全本地 Ollama+本地 Whisper / ④ 混合（Claude API + 本地 embedding）。
 
 ### 11.4 首次启动 Onboarding
 
-1. 检测 `user_settings` 为空 → 强制走 `/setup` 引导
-2. 用 `INITIAL_PASSWORD` 创建首个登录态
-3. LLM endpoint 连通性测试（用 prompt "ping" 一下）
-4. 让用户输入兴趣标签
-5. 推荐默认源列表（10 个高质量 AI 源，用户勾选启用）
-6. 触发首次抓取，跳转首页（约 2 分钟后有内容）
+分两个阶段实现：
+
+**Phase 1 · 最小可用（M1 必备）** — 让首部署用户从零到首页可用：
+
+1. 检测 `user_settings` 为空 → 强制走 `/setup`
+2. 用 `INITIAL_PASSWORD` 创建首个登录态，hash 后写入 `user_settings.password_hash`
+3. LLM / embedding endpoint 表单（一次性必填 provider/base_url/api_key/model）+ 连通性测试（用 prompt "ping"）
+4. 手动添加至少一个 RSS 源（输入框 + "添加"按钮）
+5. 触发首次抓取 → 跳转首页（约 2 分钟后内容到达，期间显示骨架屏）
+
+**Phase 2 · 完整引导（M5 polish）**：
+
+6. 在 step 3 之后让用户输入兴趣标签（带候选建议 chips）
+7. 在 step 4 替换为"勾选推荐源"UI：内置 10 个高质量 AI 源，用户勾选启用（仍允许跳过、自己手动加）
+8. 完成步骤的可视化进度条 + 优雅文案 + 多语言翻译
 
 ### 11.5 CI/CD
 
@@ -797,17 +845,22 @@ DEFAULT_WHISPER_MODEL=whisper-large-v3
 
 ## 15. 时间预估 · Timeline
 
-5 个月全职（约 22 周），建议 milestone：
+5 个月全职（约 22 周）。设计原则：
+
+- **状态机的形态从 M1 开始就是最终形态**（6 个 stage 完整存在），各 stage 内部逻辑可分阶段从"stub 占位"演化为"完整实现"。这样：（a）`state='done'` 过滤语义全程稳定；（b）单元/集成测试一开始就能建立；（c）增量替换 stub 不需要改 schema。
+- **首次启动闭环（auth + LLM 配置 + 添加源 + 触发抓取）从 M1 起必须可用**，但只用"最小可用 setup 流程"。完整 onboarding 引导（默认源、标签建议、文案打磨）放 M5。
 
 | Milestone | 周 | 内容 |
 |---|---|---|
-| M0 · 骨架 | 1-2 | monorepo 搭建、DB schema、Docker compose、CI、auth、i18n 框架 |
-| M1 · 单端到端 | 3-5 | 1 个 RSS 源完整流水线 → 首页能展示 → 单条详情 → 搜索能找到 |
-| M2 · 源拓展 | 6-8 | YouTube 字幕、Bilibili、视频转写、临时 URL 粘贴 |
-| M3 · AI 全开 | 9-12 | depth score、dedup、日报、深度摘要 lazy、视频类型 prompt 分支 |
-| M4 · Agent | 13-16 | 工具集、tool-use 循环、SSE 流式、独立页 + 抽屉双形态 |
-| M5 · 打磨 | 17-19 | UI 细节、深色模式、移动端响应式、Onboarding |
-| M6 · 上线 | 20-22 | E2E 测试、文档、Vercel 兼容路径、首次公开发布 |
+| M0 · 骨架 | 1-2 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
+| M1 · 端到端最小闭环 | 3-6 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
+| M2 · 源拓展 | 7-9 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析）/ 临时 URL 粘贴 / transcript_status 各分支 |
+| M3 · AI 全开 | 10-13 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类、日报生成、视频类型 prompt 分支、`/admin/jobs` 失败 retry UI |
+| M4 · Agent | 14-17 | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
+| M5 · Onboarding 打磨 | 18-19 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
+| M6 · 上线 | 20-22 | E2E 测试覆盖、README 中英双语、Vercel + Supabase 兼容路径与文档、GHCR 镜像发布、首次公开发布 |
+
+每个 milestone 结束做一次 spec 复核，砍掉新冒出的"看着好"特性。M1 是最关键的——闭环能跑通后续都是增量。
 
 ---
 
