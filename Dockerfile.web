@@ -15,13 +15,16 @@ COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
 COPY . .
 WORKDIR /app/apps/web
+# Secrets are injected at runtime (compose), not baked into the image. Skip env
+# validation during the build; the runtime stage below sets no such flag.
+ENV SKIP_ENV_VALIDATION=1
 RUN pnpm next build
 
 FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/apps/web/.next ./apps/web/.next
-COPY --from=build /app/apps/web/public ./apps/web/public
+# COPY --from=build /app/apps/web/public ./apps/web/public
 COPY --from=build /app/apps/web/package.json ./apps/web/
 COPY --from=build /app/apps/web/next.config.ts ./apps/web/
 COPY --from=build /app/packages/core ./packages/core

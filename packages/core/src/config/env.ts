@@ -35,7 +35,13 @@ const rawEnv = Object.fromEntries(
 );
 
 const parsed = Schema.safeParse(rawEnv);
-if (!parsed.success) {
+
+// `next build` evaluates server modules (e.g. route handlers) to collect page
+// data, which transitively imports this module. Real secrets are injected at
+// runtime (compose), never at build time, so requiring them here would break
+// the image build. SKIP_ENV_VALIDATION (T3 convention) lets the build proceed;
+// the running container has no such flag and still validates strictly at boot.
+if (!parsed.success && !process.env.SKIP_ENV_VALIDATION) {
   // zod 4 renamed `error.errors` to `error.issues`
   const message = parsed.error.issues
     .map((e) => `  - ${e.path.join('.')}: ${e.message}`)
@@ -43,4 +49,4 @@ if (!parsed.success) {
   throw new Error(`Invalid environment:\n${message}`);
 }
 
-export const env: Env = parsed.data;
+export const env: Env = (parsed.success ? parsed.data : rawEnv) as Env;
