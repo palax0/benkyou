@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, type StartedTestContainer } from 'testcontainers';
+import {
+  GenericContainer,
+  Wait,
+  type StartedTestContainer,
+} from 'testcontainers';
 import postgres from 'postgres';
 import { runMigrations } from '../src/db/migrate.js';
 
@@ -16,6 +20,13 @@ describe('migrations apply to a fresh PG', () => {
         POSTGRES_DB: 'test',
       })
       .withExposedPorts(5432)
+      // Postgres opens its port briefly during init before it is truly ready;
+      // the readiness log appears twice (bootstrap, then real start), so wait
+      // for the second to avoid a "database system is starting up" race when
+      // containers spin up in parallel with other suites.
+      .withWaitStrategy(
+        Wait.forLogMessage(/database system is ready to accept connections/, 2),
+      )
       .start();
     const host = container.getHost();
     const port = container.getMappedPort(5432);
