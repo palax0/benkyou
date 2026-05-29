@@ -135,46 +135,6 @@ Do not implement these even if they seem helpful:
 
 ---
 
-## Code Authorship Boundary (IMPORTANT)
-
-This project is a portfolio piece. The user must be able to explain and defend every load-bearing design decision in interviews. Therefore there is a **clear split between code the user hand-writes and code agents may freely generate**. Agents must respect this split — do not silently write the user-owned modules.
-
-### Agents may write freely
-
-Scaffolding and glue: monorepo configs, tsconfig, eslint, Dockerfiles, docker-compose, CI workflows, Next.js route shells, React UI components & layouts, Tailwind styling, i18n keys, Drizzle schema definitions (mechanical translation from spec), migration files, test setup/scaffolding, E2E test bodies, REST/Server Action thin wrappers, error message strings, README/docs.
-
-### User hand-writes — agents must NOT generate without explicit request
-
-These modules are the **learning-critical core**. If an agent finds itself about to implement one of these without an explicit "write this for me" instruction, **stop and ask**:
-
-1. **Auth core**: argon2 verify, session token creation, CSRF token check, login rate-limit. (`packages/core/src/auth/`)
-2. **Pipeline state machine internals**: the `attempts++` → `onFail` → `state='failed'` transition; the per-stage handler dispatcher loop. (`packages/core/src/pipeline/state.ts` and the worker loop)
-3. **First implementation of each new pipeline stage**: when adding a stage type (ingest, extract, embed, score, dedup, summary, transcribe), the user writes the first complete version; subsequent variants/refactors are fair game for agents.
-4. **Video transcription chunking & merging**: chunked Whisper calls with overlap, boundary alignment, speaker-label parsing. (`packages/core/src/pipeline/transcribe.ts`)
-5. **Search hybrid query**: the lexical + vector candidate SQL, RRF merge formula, quality rerank. (`packages/core/src/search/hybrid.ts`)
-6. **Dedup clustering**: similarity threshold logic, canonical re-election. (`packages/core/src/pipeline/dedup.ts`)
-7. **Agent tool-use loop**: the `streamText({ tools, maxSteps })` driver, SSE event mapping, conversation persistence. (`packages/core/src/agent/loop.ts`)
-8. **Agent tool definitions**: schema + execute for each of the 4 MVP tools. (`packages/core/src/agent/tools/*.ts`)
-9. **All LLM prompts**: score rubric, summary, deep summary, digest intro, tool routing system prompts. (`packages/core/src/prompts/`)
-10. **Daily digest selection algorithm**: `effective_weight` computation, per-category top-N, intro generation orchestration. (`packages/core/src/pipeline/digest.ts`)
-11. **Provider factory**: `resolveLLM` / `resolveEmbedding` — the user writes the initial version to internalize the abstraction (`packages/core/src/ai/provider.ts`).
-
-### Workflow when user is hand-writing a user-owned module
-
-The user prefers this loop with AI assistance:
-
-1. **Sketch pass**: user asks AI for a "throwaway first draft" to see how AI would approach it. Read, do not commit.
-2. **User-written pass**: user closes the AI draft and writes their own version from scratch (referencing only the spec, not the draft).
-3. **Review pass**: user asks AI "here's my implementation; how does it differ from your draft, and what trade-offs am I making?" — this is where most learning happens.
-
-When asked to do step 1 or step 3, **deliver concretely** (real code, real diff analysis) — these are real work for the user even if AI does most of the typing.
-
-### Timeline impact
-
-Hand-writing the modules above adds ~5 weeks to the M1–M6 timeline (22 → 27 weeks). This is accepted and reflected in execution-time expectations; do not pressure the user to delegate user-owned modules for "speed".
-
----
-
 ## Before Submitting a Change
 
 Run these checks (CI runs all of them):
