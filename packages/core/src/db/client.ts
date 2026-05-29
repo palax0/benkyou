@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { env } from '../config/env.js';
+import { env } from '../config/env';
 
 let _client: postgres.Sql | null = null;
 

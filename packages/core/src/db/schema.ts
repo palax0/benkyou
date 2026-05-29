@@ -14,7 +14,7 @@ import {
   customType,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { env } from '../config/env.js';
+import { env } from '../config/env';
 
 /* pgvector type — Drizzle has no built-in for vector(N), so define a customType */
 const vector = (dim: number) =>

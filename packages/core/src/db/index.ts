@@ -1,3 +1,3 @@
-export { getDbClient, closeDbClient } from './client.js';
+export { getDbClient, closeDbClient } from './client';
 export { sql } from 'drizzle-orm';
-export * from './schema.js';
+export * from './schema';
