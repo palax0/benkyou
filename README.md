@@ -17,7 +17,7 @@ echo "SESSION_SECRET=$(openssl rand -base64 32)" >> .env
 
 pnpm install
 docker compose up -d postgres
-pnpm tsx scripts/migrate.ts
+pnpm migrate
 pnpm dev
 ```
 
@@ -31,7 +31,7 @@ Visit http://localhost:3000.
 | `pnpm -w run test` | Run unit + integration tests across all workspaces |
 | `pnpm -w run test:e2e` | Run Playwright E2E (requires running stack) |
 | `pnpm -w run lint` / `pnpm -w run typecheck` / `pnpm -w run check:i18n` | Quality gates |
-| `pnpm tsx scripts/migrate.ts` | Apply DB migrations |
+| `pnpm migrate` | Apply DB migrations (loads `.env`) |
 
 ## Project layout
 

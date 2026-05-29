@@ -12,10 +12,11 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "test:e2e": "pnpm --filter @benkyou/web run test:e2e",
-    "migrate": "tsx scripts/migrate.ts",
+    "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "check:i18n": "tsx scripts/check-i18n.ts"
   },
   "devDependencies": {
+    "@benkyou/core": "workspace:*",
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
