@@ -12,13 +12,23 @@ describe('env config', () => {
     vi.unstubAllEnvs();
   });
 
-  test('rejects when SESSION_SECRET shorter than 32 chars', async () => {
+  test('assertEnv() throws when SESSION_SECRET shorter than 32 chars', async () => {
     vi.resetModules();
     vi.stubEnv('DEPLOY_MODE', 'docker');
     vi.stubEnv('DATABASE_URL', 'postgres://x/y');
     vi.stubEnv('SESSION_SECRET', 'short');
     vi.stubEnv('EMBED_DIM', '1536');
-    await expect(import('../src/config/env.js')).rejects.toThrow(/SESSION_SECRET/);
+    const { assertEnv } = await import('../src/config/env.js');
+    expect(() => assertEnv()).toThrow(/SESSION_SECRET/);
+    vi.unstubAllEnvs();
+  });
+
+  test('importing the module never throws, even with invalid env', async () => {
+    vi.resetModules();
+    vi.stubEnv('DATABASE_URL', '');
+    vi.stubEnv('SESSION_SECRET', 'short');
+    vi.stubEnv('EMBED_DIM', 'not-a-number');
+    await expect(import('../src/config/env.js')).resolves.toBeDefined();
     vi.unstubAllEnvs();
   });
 

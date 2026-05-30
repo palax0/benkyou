@@ -1,6 +1,8 @@
-import { env } from '@benkyou/core/config';
+import { assertEnv, env } from '@benkyou/core/config';
 
 async function main() {
+  assertEnv();
+
   if (env.DEPLOY_MODE === 'docker') {
     const { runLoop } = await import('./loop.js');
     await runLoop();

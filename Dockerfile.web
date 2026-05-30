@@ -15,9 +15,9 @@ COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
 COPY . .
 WORKDIR /app/apps/web
-# Secrets are injected at runtime (compose), not baked into the image. Skip env
-# validation during the build; the runtime stage below sets no such flag.
-ENV SKIP_ENV_VALIDATION=1
+# Secrets are injected at runtime (compose), not baked into the image. The build
+# imports server modules but never calls assertEnv() — that runs at server
+# startup via instrumentation.ts — so no env is required here.
 RUN pnpm next build
 
 FROM base AS runtime
