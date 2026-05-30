@@ -56,6 +56,8 @@ docs/
 - ❌ Direct DB access from `apps/web` or `apps/worker` (use `@benkyou/core/db`)
 - ❌ Provider-specific LLM calls anywhere outside `packages/core/src/ai/`
 
+**Env loading, `@benkyou/core` imports, and Docker builds have non-obvious traps** — read [`docs/dev/env-and-monorepo.md`](docs/dev/env-and-monorepo.md) before touching them.
+
 ---
 
 ## Hard Invariants
@@ -112,26 +114,13 @@ Both modes call the same per-stage handlers in `packages/core/src/pipeline/`.
 
 ## Explicit Non-Goals
 
-Do not implement these even if they seem helpful:
-
-- Multi-user accounts (single-user only)
-- Personalized recommendations based on behavior (postponed to a later phase)
-- Browser extension (postponed)
-- Native mobile app (responsive web only)
-- Notes / highlights / annotations (not rebuilding Readwise)
-- Social features (sharing, comments, follows)
-- Offline mode
-- Self-trained models (all AI is BYO endpoint)
+Do not implement these even if they seem helpful (rationale in spec §3.4): multi-user/multi-tenancy, behavior-based personalization (postponed), browser extension (postponed), native mobile app (responsive web only), notes/highlights/annotations, social features, offline mode, self-trained models (all AI is BYO endpoint).
 
 ---
 
 ## Working with the User
 
-- User is a frontend developer learning full-stack — connect new backend/DB concepts to BFF/frontend analogues they know
-- User is sharp at design review — surface tradeoffs and edge cases explicitly, don't hand-wave
-- Communicates in Chinese; technical English fine in code/comments
-- Wants substantive pushback when a design seems wrong, not validation
-- Prefers concrete recommendations + tradeoff over open-ended exploration
+Maintainer communicates in Chinese (technical English fine in code/comments). Wants substantive pushback when something seems wrong, not validation — surface tradeoffs and edge cases explicitly, don't hand-wave.
 
 ---
 
@@ -163,7 +152,6 @@ pnpm --filter @benkyou/web dev
 
 ## Where to Get Stuck (and Ask)
 
-- Spec says X but reality requires Y → ask, don't silently diverge
 - Library version doesn't match plan → ask before upgrading (versions in plan are pinned for reproducibility)
 - New external service / SaaS dependency → ask (this project is self-host-first)
 - More than 200 lines of new code in one task → consider whether the task should be split
