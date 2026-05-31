@@ -1,5 +1,25 @@
 {
   "home": { "title": "Benkyou", "subtitle": "Personal AI news aggregator" },
   "login": { "title": "Sign in", "password": "Password", "submit": "Sign in", "invalid": "Wrong password" },
-  "nav": { "feed": "Feed", "search": "Search", "settings": "Settings", "logout": "Sign out" }
+  "nav": { "feed": "Feed", "search": "Search", "settings": "Settings", "logout": "Sign out" },
+  "setup": {
+    "title": "Initialize Benkyou",
+    "needInitialPassword": "Set INITIAL_PASSWORD in .env first, then refresh this page.",
+    "locale": "Language",
+    "llmSection": "Chat model (LLM)",
+    "embedSection": "Embedding model",
+    "provider": "Provider",
+    "baseUrl": "Base URL (required for openai-compatible / ollama)",
+    "apiKey": "API Key",
+    "model": "Model",
+    "cheapModel": "Cheap model (for scoring/summaries, optional)",
+    "interests": "Interest tags (comma-separated)",
+    "sourceSection": "First RSS source",
+    "sourceName": "Name",
+    "sourceUrl": "RSS URL",
+    "submit": "Finish & fetch",
+    "dimMismatch": "Embedding dim {got} != EMBED_DIM={want}. Use a matching model or re-init with a different EMBED_DIM.",
+    "llmFailed": "LLM connection failed: {error}",
+    "embedFailed": "Embedding connection failed: {error}"
+  }
 }

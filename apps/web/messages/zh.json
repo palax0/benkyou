@@ -1,5 +1,25 @@
 {
   "home": { "title": "Benkyou", "subtitle": "个人 AI 资讯聚合平台" },
   "login": { "title": "登录", "password": "密码", "submit": "登录", "invalid": "密码错误" },
-  "nav": { "feed": "动态", "search": "搜索", "settings": "设置", "logout": "退出" }
+  "nav": { "feed": "动态", "search": "搜索", "settings": "设置", "logout": "退出" },
+  "setup": {
+    "title": "初始化 Benkyou",
+    "needInitialPassword": "请先在 .env 设置 INITIAL_PASSWORD，再刷新本页。",
+    "locale": "界面语言",
+    "llmSection": "对话模型 (LLM)",
+    "embedSection": "向量模型 (Embedding)",
+    "provider": "Provider",
+    "baseUrl": "Base URL（openai-compatible / ollama 必填）",
+    "apiKey": "API Key",
+    "model": "模型",
+    "cheapModel": "便宜模型（评分/摘要用，可留空）",
+    "interests": "兴趣标签（英文逗号分隔）",
+    "sourceSection": "第一个 RSS 源",
+    "sourceName": "名称",
+    "sourceUrl": "RSS 地址",
+    "submit": "完成初始化并抓取",
+    "dimMismatch": "Embedding 维度 {got} 与 EMBED_DIM={want} 不一致，请改用匹配的模型或更换 EMBED_DIM 重新初始化。",
+    "llmFailed": "LLM 连接失败：{error}",
+    "embedFailed": "Embedding 连接失败：{error}"
+  }
 }
