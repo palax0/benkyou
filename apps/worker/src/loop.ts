@@ -1,7 +1,2 @@
-export async function runLoop(): Promise<void> {
-  console.log('[worker] long-running loop started; awaiting jobs (M0 stub)');
-  // M1 will plug in pg-boss handlers
-  return new Promise(() => {
-    // Intentional never-resolve; SIGTERM kills it
-  });
-}
+// Worker long-running mode delegates to the shared implementation in core.
+export { runWorkerLoop as runLoop } from '@benkyou/core/queue';
