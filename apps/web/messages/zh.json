@@ -18,6 +18,7 @@
     "embedFailed": "Embedding 连接失败：{error}",
     "dimMismatch": "Embedding 维度 {got} 与固定值 {want} 不一致。"
   },
+  "item": { "deepSummary": "AI 深度摘要", "generating": "正在生成…", "noSummary": "暂无摘要", "original": "原文", "noContent": "没有正文内容" },
   "setup": {
     "title": "初始化 Benkyou",
     "needInitialPassword": "请先在 .env 设置 INITIAL_PASSWORD，再刷新本页。",

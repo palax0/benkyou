@@ -18,6 +18,7 @@
     "embedFailed": "Embedding connection failed: {error}",
     "dimMismatch": "Embedding dim {got} != frozen {want}."
   },
+  "item": { "deepSummary": "AI deep summary", "generating": "Generating…", "noSummary": "No summary", "original": "Original", "noContent": "No content" },
   "setup": {
     "title": "Initialize Benkyou",
     "needInitialPassword": "Set INITIAL_PASSWORD in .env first, then refresh this page.",
