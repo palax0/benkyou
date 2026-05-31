@@ -15,6 +15,7 @@
     "./pipeline": "./src/pipeline/index.ts",
     "./settings": "./src/settings/index.ts",
     "./sources": "./src/sources/index.ts",
+    "./setup": "./src/setup/index.ts",
     "./config": "./src/config/env.ts"
   },
   "scripts": {
