@@ -19,6 +19,7 @@
     "dimMismatch": "Embedding dim {got} != frozen {want}."
   },
   "item": { "deepSummary": "AI deep summary", "generating": "Generating…", "noSummary": "No summary", "original": "Original", "noContent": "No content" },
+  "search": { "title": "Search", "placeholder": "Search…", "noResults": "No results" },
   "setup": {
     "title": "Initialize Benkyou",
     "needInitialPassword": "Set INITIAL_PASSWORD in .env first, then refresh this page.",
