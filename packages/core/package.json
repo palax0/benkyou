@@ -27,12 +27,17 @@
     "drizzle-orm": "^0.45.0",
     "postgres": "^3.4.9",
     "pg-boss": "^12.18.0",
-    "zod": "^4.4.0"
+    "zod": "^4.4.0",
+    "rss-parser": "^3.13.0",
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^26.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "drizzle-kit": "^0.31.0",
     "vitest": "^4.0.0",
-    "testcontainers": "^12.0.0"
+    "testcontainers": "^12.0.0",
+    "@types/jsdom": "^21.1.7",
+    "msw": "^2.7.0"
   }
 }
