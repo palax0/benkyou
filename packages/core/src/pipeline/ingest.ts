@@ -16,6 +16,11 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
   if (!source.enabled) return { fetched: 0, inserted: [] };
 
   const adapter = getAdapter(source.type);
+  // Intentional asymmetry with extract's degrade-on-error: a source we can't
+  // fetch/parse throws here, so the ingest job retries (and lastPolledAt is left
+  // unadvanced → still due). A transient feed outage must not silently skip a
+  // poll. Per-item extraction failures, by contrast, degrade so one bad article
+  // doesn't block the rest.
   const raw = await adapter.fetchItems(source.config as Record<string, unknown>);
 
   const inserted: string[] = [];

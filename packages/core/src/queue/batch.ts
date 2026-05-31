@@ -42,6 +42,14 @@ export async function processBatch(maxJobs: number): Promise<BatchResult> {
           await boss.complete(queue, job.id);
         } catch (err) {
           errors += 1;
+          // boss.fail reschedules with exponential backoff (retryBackoff, see
+          // queues.ts), so a failing job is NOT re-fetched in this same drain —
+          // it reappears in a later invocation once its backoff elapses, and only
+          // reaches the dead-letter queue (→ state='failed') after retryLimit such
+          // invocations. Terminal failure under serverless is therefore spread
+          // across multiple cron ticks, not resolved in one processBatch call;
+          // keep the /api/cron/work cadence well under the backoff growth so
+          // failures surface in bounded time.
           await boss.fail(queue, job.id, {
             message: err instanceof Error ? err.message : String(err),
           });
