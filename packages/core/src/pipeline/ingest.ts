@@ -1,0 +1,48 @@
+import { eq } from 'drizzle-orm';
+import { getDbClient, items, sources } from '../db';
+import { getAdapter } from '../sources';
+import { urlHash } from '../util/url';
+
+export interface IngestResult {
+  fetched: number;
+  inserted: string[]; // ids of newly created items (need extract); excludes dedup hits
+}
+
+export async function ingestSource(sourceId: string): Promise<IngestResult> {
+  const db = getDbClient();
+  const srcRows = await db.select().from(sources).where(eq(sources.id, sourceId)).limit(1);
+  const source = srcRows[0];
+  if (!source) throw new Error(`Source not found: ${sourceId}`);
+  if (!source.enabled) return { fetched: 0, inserted: [] };
+
+  const adapter = getAdapter(source.type);
+  const raw = await adapter.fetchItems(source.config as Record<string, unknown>);
+
+  const inserted: string[] = [];
+  for (const r of raw) {
+    // ON CONFLICT DO NOTHING (no target) covers BOTH unique constraints:
+    // url_hash and the partial (source_id, external_id). A returning row means
+    // it was genuinely new.
+    const rows = await db
+      .insert(items)
+      .values({
+        sourceId: source.id,
+        externalId: r.externalId,
+        url: r.url,
+        urlHash: urlHash(r.url),
+        title: r.title,
+        author: r.author,
+        publishedAt: r.publishedAt,
+        contentType: 'article',
+        rawContent: r.content, // may be null → extract will fetch + Readability
+        state: 'pending',
+        currentStage: 'extract',
+      })
+      .onConflictDoNothing()
+      .returning({ id: items.id });
+    if (rows[0]) inserted.push(rows[0].id);
+  }
+
+  await db.update(sources).set({ lastPolledAt: new Date() }).where(eq(sources.id, source.id));
+  return { fetched: raw.length, inserted };
+}
