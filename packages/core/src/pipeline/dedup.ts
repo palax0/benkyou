@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { eventClusters, getDbClient, items } from '../db';
 
 // M1 STUB (spec §15): no similarity clustering yet. Every item becomes the
@@ -15,9 +15,17 @@ export async function dedupItem(itemId: string): Promise<void> {
   const item = rows[0];
   if (!item) throw new Error(`Item not found: ${itemId}`);
 
+  // Idempotent under pg-boss redelivery: a unique index on canonical_item means
+  // a redelivered job (crash before completeStage, state still 'scored') reuses
+  // the existing cluster instead of inserting an orphan. ON CONFLICT DO UPDATE
+  // (not DO NOTHING) so RETURNING still yields the id on the conflict path.
   const clusterRows = await db
     .insert(eventClusters)
     .values({ canonicalItem: itemId, keywords: item.topicTags ?? [], itemCount: 1 })
+    .onConflictDoUpdate({
+      target: eventClusters.canonicalItem,
+      set: { keywords: item.topicTags ?? [], lastUpdatedAt: sql`now()` },
+    })
     .returning({ id: eventClusters.id });
   const clusterId = clusterRows[0]?.id;
   if (!clusterId) throw new Error('Failed to create event cluster');

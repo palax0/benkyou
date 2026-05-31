@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "event_clusters_canonical_item_uniq" ON "event_clusters" USING btree ("canonical_item");

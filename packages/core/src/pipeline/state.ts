@@ -43,6 +43,17 @@ export const NEXT_STAGE: Record<PerItemStage, PerItemStage | null> = {
   summary: null,
 };
 
+/** Current pipeline state of an item, or undefined if the item no longer exists. */
+export async function getItemState(itemId: string): Promise<ItemState | undefined> {
+  const db = getDbClient();
+  const rows = await db
+    .select({ state: items.state })
+    .from(items)
+    .where(eq(items.id, itemId))
+    .limit(1);
+  return rows[0]?.state as ItemState | undefined;
+}
+
 /**
  * Mark the start of a stage attempt: set current_stage, bump attempts.
  * Returns the new attempts count (1 on first try).

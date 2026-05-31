@@ -94,14 +94,21 @@ export const sources = pgTable('sources', {
 });
 
 /* ─── event_clusters ─── (forward-declared because items references it) */
-export const eventClusters = pgTable('event_clusters', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  canonicalItem: uuid('canonical_item'),
-  keywords: text('keywords').array(),
-  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow(),
-  lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).defaultNow(),
-  itemCount: integer('item_count').default(1),
-});
+export const eventClusters = pgTable(
+  'event_clusters',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    canonicalItem: uuid('canonical_item'),
+    keywords: text('keywords').array(),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow(),
+    lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).defaultNow(),
+    itemCount: integer('item_count').default(1),
+  },
+  // One cluster per canonical item — makes dedupItem's INSERT ... ON CONFLICT
+  // idempotent under pg-boss redelivery (no orphan clusters). Holds in M3 too:
+  // an item is the canonical member of at most one cluster.
+  (t) => [uniqueIndex('event_clusters_canonical_item_uniq').on(t.canonicalItem)],
+);
 
 /* ─── items ─── */
 export const items = pgTable(
