@@ -10,6 +10,7 @@ import { testEmbedding, testLLM } from '@benkyou/core/setup';
 export interface SettingsState {
   ok?: boolean;
   error?: string;
+  detail?: string;
   values?: { got: number; want: number };
 }
 
@@ -53,9 +54,9 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
   const embedCfg = { provider: v.embedProvider, baseUrl: v.embedBaseUrl, apiKey: v.embedApiKey, model: v.embedModel };
 
   const llmTest = await testLLM(llmCfg);
-  if (!llmTest.ok) return { error: 'llmFailed' };
+  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error };
   const embTest = await testEmbedding(embedCfg);
-  if (!embTest.ok) return { error: 'embedFailed' };
+  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error };
   if (embTest.dim !== env.EMBED_DIM) {
     return { error: 'dimMismatch', values: { got: embTest.dim ?? 0, want: env.EMBED_DIM } };
   }

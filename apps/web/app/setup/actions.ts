@@ -16,6 +16,7 @@ import { SESSION_COOKIE } from '@/lib/session-cookie';
 
 export interface SetupState {
   error?: string;
+  detail?: string;
   values?: { got: number; want: number };
 }
 
@@ -66,9 +67,9 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
 
   // Onboarding forces connectivity tests (spec §14.1: misconfig is the #1 risk).
   const llmTest = await testLLM(llmCfg);
-  if (!llmTest.ok) return { error: 'llmFailed' };
+  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error };
   const embTest = await testEmbedding(embedCfg);
-  if (!embTest.ok) return { error: 'embedFailed' };
+  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error };
   if (embTest.dim !== env.EMBED_DIM) {
     return { error: 'dimMismatch', values: { got: embTest.dim ?? 0, want: env.EMBED_DIM } };
   }

@@ -14,7 +14,7 @@ export function SetupForm() {
     state.error === 'dimMismatch'
       ? t('dimMismatch', { got: state.values?.got ?? 0, want: state.values?.want ?? 0 })
       : state.error
-        ? t(state.error as 'llmFailed')
+        ? t(state.error as 'llmFailed', { error: state.detail ?? '' })
         : null;
 
   return (
