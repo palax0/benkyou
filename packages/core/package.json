@@ -10,7 +10,10 @@
     "./db": "./src/db/index.ts",
     "./db/migrate": "./src/db/migrate.ts",
     "./ai": "./src/ai/index.ts",
-    "./queue": "./src/queue/boss.ts",
+    "./queue": "./src/queue/index.ts",
+    "./pipeline": "./src/pipeline/index.ts",
+    "./settings": "./src/settings/index.ts",
+    "./sources": "./src/sources/index.ts",
     "./config": "./src/config/env.ts"
   },
   "scripts": {
