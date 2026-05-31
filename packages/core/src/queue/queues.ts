@@ -17,6 +17,8 @@ export interface IngestJob {
 // pg-boss 12 sets retry/dead-letter policy per queue at creation; createQueue is
 // idempotent so this is safe to call on every worker/batch startup.
 export async function registerQueues(boss: PgBoss, maxAttempts: number): Promise<void> {
+  // Dead-letter queue must exist before any queue that references it as deadLetter.
+  await boss.createQueue(DEAD_LETTER_QUEUE);
   await boss.createQueue(INGEST_QUEUE, { retryLimit: maxAttempts, retryBackoff: true });
   for (const stage of PER_ITEM_STAGES) {
     await boss.createQueue(stage, {
@@ -25,7 +27,6 @@ export async function registerQueues(boss: PgBoss, maxAttempts: number): Promise
       deadLetter: DEAD_LETTER_QUEUE,
     });
   }
-  await boss.createQueue(DEAD_LETTER_QUEUE);
 }
 
 export async function enqueueIngest(boss: PgBoss, sourceId: string): Promise<void> {
