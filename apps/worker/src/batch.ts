@@ -1,9 +1,3 @@
-export interface BatchResult {
-  processed: number;
-  errors: number;
-}
-
-export async function processBatch(maxJobs: number): Promise<BatchResult> {
-  console.log(`[worker] processBatch(${maxJobs}) — M0 stub`);
-  return { processed: 0, errors: 0 };
-}
+// Serverless batch handler delegates to the shared implementation in core.
+// (/api/cron/work in apps/web calls the same core processBatch in M1b.)
+export { processBatch, type BatchResult } from '@benkyou/core/queue';
