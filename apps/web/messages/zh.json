@@ -2,6 +2,7 @@
   "home": { "title": "Benkyou", "subtitle": "个人 AI 资讯聚合平台" },
   "login": { "title": "登录", "password": "密码", "submit": "登录", "invalid": "密码错误" },
   "nav": { "feed": "动态", "search": "搜索", "settings": "设置", "logout": "退出" },
+  "feed": { "title": "动态", "empty": "还没有内容。添加源后约 2 分钟内会出现。", "prev": "上一页", "next": "下一页" },
   "setup": {
     "title": "初始化 Benkyou",
     "needInitialPassword": "请先在 .env 设置 INITIAL_PASSWORD，再刷新本页。",
