@@ -17,7 +17,8 @@
     "./sources": "./src/sources/index.ts",
     "./setup": "./src/setup/index.ts",
     "./config": "./src/config/env.ts",
-    "./items": "./src/items/index.ts"
+    "./items": "./src/items/index.ts",
+    "./search": "./src/search/index.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts",
