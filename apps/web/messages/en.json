@@ -3,6 +3,21 @@
   "login": { "title": "Sign in", "password": "Password", "submit": "Sign in", "invalid": "Wrong password" },
   "nav": { "feed": "Feed", "search": "Search", "settings": "Settings", "logout": "Sign out" },
   "feed": { "title": "Feed", "empty": "Nothing yet. Items appear ~2 min after adding a source.", "prev": "Prev", "next": "Next" },
+  "settings": {
+    "title": "Settings",
+    "providerSection": "Model configuration",
+    "saved": "Saved",
+    "embedDimNote": "Embedding dim is frozen at {dim} since install. To change it, run scripts/migrate-embeddings.ts.",
+    "passwordSection": "Change password",
+    "newPassword": "New password (min 8 chars)",
+    "changePassword": "Update password",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "passwordChanged": "Password updated",
+    "save": "Save",
+    "llmFailed": "LLM connection failed: {error}",
+    "embedFailed": "Embedding connection failed: {error}",
+    "dimMismatch": "Embedding dim {got} != frozen {want}."
+  },
   "setup": {
     "title": "Initialize Benkyou",
     "needInitialPassword": "Set INITIAL_PASSWORD in .env first, then refresh this page.",
