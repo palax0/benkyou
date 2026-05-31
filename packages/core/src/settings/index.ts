@@ -34,3 +34,34 @@ export function buildEmbeddingConfig(s: UserSettings): EmbeddingConfig {
     model: s.embedModel,
   };
 }
+
+export interface SettingsPatch {
+  locale?: 'zh' | 'en';
+  llmProvider?: string;
+  llmBaseUrl?: string | null;
+  llmApiKey?: string | null;
+  llmModel?: string;
+  llmCheapModel?: string | null;
+  embedProvider?: string;
+  embedBaseUrl?: string | null;
+  embedApiKey?: string | null;
+  embedModel?: string;
+  interestTags?: string[];
+}
+
+export async function updateSettings(patch: SettingsPatch): Promise<void> {
+  const db = getDbClient();
+  await db
+    .update(userSettings)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(userSettings.id, 1));
+}
+
+// Hashing stays in @benkyou/core/auth; the web action hashes then calls this.
+export async function setPasswordHash(passwordHash: string): Promise<void> {
+  const db = getDbClient();
+  await db
+    .update(userSettings)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(userSettings.id, 1));
+}
