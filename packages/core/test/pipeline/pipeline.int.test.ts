@@ -7,7 +7,12 @@ import postgres from 'postgres';
 // No real AI provider: stub the three AI SDK calls the stages make. The mock is
 // hoisted, so the dynamically-imported stages below pick it up.
 vi.mock('ai', () => ({
-  embed: vi.fn(async () => ({ embedding: Array.from({ length: 1536 }, () => 0.01) })),
+  embedMany: vi.fn(async () => ({
+    embeddings: [
+      Array.from({ length: 1536 }, () => 0.01),
+      Array.from({ length: 1536 }, () => 0.02),
+    ],
+  })),
   generateObject: vi.fn(async () => ({
     object: { topic_tags: ['llm'], topic_score: 0.8, category: 'knowledge' },
   })),

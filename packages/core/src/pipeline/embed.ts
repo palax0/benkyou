@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { embed } from 'ai';
+import { embedMany } from 'ai';
 import { getDbClient, items, itemEmbeddings } from '../db';
 import { env } from '../config/env';
 import { resolveEmbedding } from '../ai';
@@ -22,8 +22,12 @@ export async function embedItem(itemId: string): Promise<void> {
   const body = truncateChars(item.rawContent, MAX_CONTENT_CHARS);
   const docText = body ? `${item.title}\n\n${body}` : item.title;
 
-  const { embedding } = await embed({ model, value: docText });
-  const { embedding: titleEmbedding } = await embed({ model, value: item.title });
+  // One round-trip for both vectors. Order matches values: [doc, title].
+  const { embeddings } = await embedMany({ model, values: [docText, item.title] });
+  const [embedding, titleEmbedding] = embeddings;
+  if (!embedding || !titleEmbedding) {
+    throw new Error(`Embedding provider returned ${embeddings.length} vectors, expected 2`);
+  }
 
   // Hard invariant: vector(N) is frozen at install time. A model whose output
   // dim != EMBED_DIM must fail loudly, not corrupt the table.
