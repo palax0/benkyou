@@ -1,6 +1,5 @@
 {
-  "home": {
-    "title": "Benkyou",
-    "subtitle": "个人 AI 资讯聚合平台"
-  }
+  "home": { "title": "Benkyou", "subtitle": "个人 AI 资讯聚合平台" },
+  "login": { "title": "登录", "password": "密码", "submit": "登录", "invalid": "密码错误" },
+  "nav": { "feed": "动态", "search": "搜索", "settings": "设置", "logout": "退出" }
 }

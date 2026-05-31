@@ -1,6 +1,5 @@
 {
-  "home": {
-    "title": "Benkyou",
-    "subtitle": "Personal AI news aggregator"
-  }
+  "home": { "title": "Benkyou", "subtitle": "Personal AI news aggregator" },
+  "login": { "title": "Sign in", "password": "Password", "submit": "Sign in", "invalid": "Wrong password" },
+  "nav": { "feed": "Feed", "search": "Search", "settings": "Settings", "logout": "Sign out" }
 }
