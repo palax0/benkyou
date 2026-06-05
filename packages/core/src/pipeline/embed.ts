@@ -34,7 +34,7 @@ export async function embedItem(itemId: string): Promise<void> {
   if (embedding.length !== env.EMBED_DIM) {
     throw new Error(
       `Embedding dim mismatch: model '${cfg.model}' returned ${embedding.length}, schema expects ${env.EMBED_DIM}. ` +
-        `Fix embed_model, or run scripts/migrate-embeddings.ts --new-dim=${embedding.length}.`,
+        `Fix embed_model to output ${env.EMBED_DIM} dims, or re-init at EMBED_DIM=${embedding.length} (regenerate migration + re-embed; no automated dim-migration script yet).`,
     );
   }
 

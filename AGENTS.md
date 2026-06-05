@@ -76,7 +76,7 @@ If you add a new pipeline stage, you must update:
 
 ### Embedding dimension is frozen at install time
 
-`pgvector` requires `vector(N)` with a literal N. `EMBED_DIM` env var is read at migration generation time and baked into the SQL. `user_settings.embed_dim` is `NOT NULL` and **must not be writable from the UI**. To change dimension, the user runs `scripts/migrate-embeddings.ts --new-dim=N` which drops + recreates `item_embeddings` and triggers full re-embedding.
+`pgvector` requires `vector(N)` with a literal N. `EMBED_DIM` is read at `drizzle-kit generate` time and baked into the migration SQL (currently `vector(1536)` in `0000_initial.sql`) — it is **not** re-read at `migrate` time, so changing the env var alone does nothing. `user_settings.embed_dim` is `NOT NULL` and **must not be writable from the UI**. Changing dimension means: set `EMBED_DIM`, regenerate the migration so `vector(N)` matches, drop + recreate `item_embeddings`, and full re-embed. **No automated migration script exists yet** — `scripts/migrate-embeddings.ts` is deferred until there's a corpus worth preserving (spec §5.3); until then the supported path is a fresh re-install at the new dim.
 
 ### Provider abstraction goes through Vercel AI SDK
 

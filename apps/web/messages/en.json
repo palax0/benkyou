@@ -7,7 +7,7 @@
     "title": "Settings",
     "providerSection": "Model configuration",
     "saved": "Saved",
-    "embedDimNote": "Embedding dim is frozen at {dim} since install. To change it, run scripts/migrate-embeddings.ts.",
+    "embedDimNote": "Embedding dim is frozen at {dim} since install. Changing it means regenerating the migration and re-initializing at the new dimension — no automated migration yet.",
     "passwordSection": "Change password",
     "newPassword": "New password (min 8 chars)",
     "changePassword": "Update password",

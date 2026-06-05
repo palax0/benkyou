@@ -7,7 +7,7 @@
     "title": "设置",
     "providerSection": "模型配置",
     "saved": "已保存",
-    "embedDimNote": "Embedding 维度在初始化时固定为 {dim}，如需更改请运行 scripts/migrate-embeddings.ts。",
+    "embedDimNote": "Embedding 维度在初始化时固定为 {dim}，更改需重新生成迁移并以新维度重新初始化（暂无自动迁移脚本）。",
     "passwordSection": "修改密码",
     "newPassword": "新密码（至少 8 位）",
     "changePassword": "更新密码",

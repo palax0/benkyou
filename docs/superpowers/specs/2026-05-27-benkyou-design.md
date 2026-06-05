@@ -307,7 +307,7 @@ create index item_emb_hnsw on item_embeddings using hnsw (embedding vector_cosin
 create index title_emb_hnsw on item_embeddings using hnsw (title_emb vector_cosine_ops);
 ```
 
-> **关于 embedding 维度**：`vector(N)` 在 pgvector 中是 hard-coded 类型参数，不能"动态 N"。因此 `embed_dim` 在**首次初始化迁移时**确定，写进 schema migration 模板。用户**一旦选定后不能在 UI 里改**；若要切换到不同维度的 model，必须运行维护脚本 `pnpm tsx scripts/migrate-embeddings.ts --new-dim=N`：drop `item_embeddings` 表 → 用新维度 recreate → 触发全量 re-embedding（自动以 batch 的方式跑）。设置页面对 `embed_dim` 字段显示只读 + warning + "运行维护脚本"链接说明。
+> **关于 embedding 维度**：`vector(N)` 在 pgvector 中是 hard-coded 类型参数，不能"动态 N"。因此 `embed_dim` 在**首次初始化迁移时**确定，写进 schema migration 模板。用户**一旦选定后不能在 UI 里改**；若要切换到不同维度的 model，需：改 `EMBED_DIM` → 重新生成迁移（让 `vector(N)` 匹配）→ drop `item_embeddings` 表 → 用新维度 recreate → 触发全量 re-embedding（自动以 batch 的方式跑）。**注：维护脚本 `scripts/migrate-embeddings.ts` 尚未实现，deferred 至有语料需保留时；在此之前的受支持方式是以新维度重新初始化（fresh re-install）。** 设置页面对 `embed_dim` 字段显示只读 + warning 说明（脚本就绪前不提供"运行脚本"入口）。
 
 ### 5.4 聚类与日报
 
