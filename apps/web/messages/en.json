@@ -14,9 +14,11 @@
     "passwordTooShort": "Password must be at least 8 characters",
     "passwordChanged": "Password updated",
     "save": "Save",
+    "requestDimensions": "Request output dimensions (truncate to {dim})",
+    "requestDimensionsHelp": "For high-dim models, check this to request {dim}-dim vectors. The model must support dimensions / Matryoshka truncation.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}",
-    "dimMismatch": "Embedding dim {got} != frozen {want}."
+    "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}."
   },
   "item": { "deepSummary": "AI deep summary", "generating": "Generating…", "noSummary": "No summary", "original": "Original", "noContent": "No content" },
   "search": { "title": "Search", "placeholder": "Search…", "noResults": "No results" },
@@ -31,12 +33,14 @@
     "apiKey": "API Key",
     "model": "Model",
     "cheapModel": "Cheap model (for scoring/summaries, optional)",
+    "requestDimensions": "Request output dimensions (truncate to {dim})",
+    "requestDimensionsHelp": "For high-dim models (e.g. 3072), check this to ask the model to return {dim}-dim vectors directly — no vector column change needed. The model must support dimensions / Matryoshka truncation.",
     "interests": "Interest tags (comma-separated)",
     "sourceSection": "First RSS source",
     "sourceName": "Name",
     "sourceUrl": "RSS URL",
     "submit": "Finish & fetch",
-    "dimMismatch": "Embedding dim {got} != EMBED_DIM={want}. Use a matching model or re-init with a different EMBED_DIM.",
+    "dimMismatch": "Embedding dim {got} != EMBED_DIM={want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}; otherwise use a matching model or re-init with a different EMBED_DIM.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}"
   }

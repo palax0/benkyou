@@ -14,9 +14,11 @@
     "passwordTooShort": "密码至少 8 位",
     "passwordChanged": "密码已更新",
     "save": "保存",
+    "requestDimensions": "请求输出维度（截断到 {dim}）",
+    "requestDimensionsHelp": "高维模型勾选此项后，请求模型返回 {dim} 维向量。模型需支持 dimensions / Matryoshka 截断。",
     "llmFailed": "LLM 连接失败：{error}",
     "embedFailed": "Embedding 连接失败：{error}",
-    "dimMismatch": "Embedding 维度 {got} 与固定值 {want} 不一致。"
+    "dimMismatch": "Embedding 维度 {got} 与固定值 {want} 不一致。若为高维模型，请勾选「请求输出维度」截断到 {want}。"
   },
   "item": { "deepSummary": "AI 深度摘要", "generating": "正在生成…", "noSummary": "暂无摘要", "original": "原文", "noContent": "没有正文内容" },
   "search": { "title": "搜索", "placeholder": "搜索内容…", "noResults": "没有找到结果" },
@@ -31,12 +33,14 @@
     "apiKey": "API Key",
     "model": "模型",
     "cheapModel": "便宜模型（评分/摘要用，可留空）",
+    "requestDimensions": "请求输出维度（截断到 {dim}）",
+    "requestDimensionsHelp": "高维模型（如 3072 维）勾选此项后，会请求模型直接返回 {dim} 维向量，无需更换 vector 列。模型需支持 dimensions / Matryoshka 截断。",
     "interests": "兴趣标签（英文逗号分隔）",
     "sourceSection": "第一个 RSS 源",
     "sourceName": "名称",
     "sourceUrl": "RSS 地址",
     "submit": "完成初始化并抓取",
-    "dimMismatch": "Embedding 维度 {got} 与 EMBED_DIM={want} 不一致，请改用匹配的模型或更换 EMBED_DIM 重新初始化。",
+    "dimMismatch": "Embedding 维度 {got} 与 EMBED_DIM={want} 不一致。若为高维模型，请勾选「请求输出维度」截断到 {want}；否则改用匹配的模型或更换 EMBED_DIM 重新初始化。",
     "llmFailed": "LLM 连接失败：{error}",
     "embedFailed": "Embedding 连接失败：{error}"
   }
