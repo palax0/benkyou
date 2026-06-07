@@ -39,15 +39,23 @@ describe('setup', () => {
       password: 'pw-12345678',
       locale: 'en',
       llm: { provider: 'openai', model: 'gpt-x', cheapModel: 'gpt-x-mini' },
-      embedding: { provider: 'openai', model: 'emb-x' },
+      embedding: { provider: 'openai', model: 'emb-x', requestDimensions: true },
       interestTags: ['llm', 'agents'],
     });
     expect(await setup.isInitialized()).toBe(true);
-    const rows = await sql<{ embed_dim: number; password_hash: string; interest_tags: string[] }[]>`
-      SELECT embed_dim, password_hash, interest_tags FROM user_settings WHERE id = 1`;
+    const rows = await sql<
+      {
+        embed_dim: number;
+        password_hash: string;
+        interest_tags: string[];
+        embed_request_dimensions: boolean;
+      }[]
+    >`
+      SELECT embed_dim, password_hash, interest_tags, embed_request_dimensions FROM user_settings WHERE id = 1`;
     expect(rows[0]!.embed_dim).toBe(1536);
     expect(rows[0]!.password_hash).toMatch(/^\$argon2id\$/);
     expect(rows[0]!.interest_tags).toEqual(['llm', 'agents']);
+    expect(rows[0]!.embed_request_dimensions).toBe(true);
   });
 
   test('addRssSource inserts an rss source and returns its id', async () => {

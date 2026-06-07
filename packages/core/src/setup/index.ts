@@ -4,7 +4,13 @@ import { getDbClient, sources, userSettings } from '../db';
 import { env } from '../config/env';
 import { hashPassword } from '../auth';
 import { enqueueIngest, getBoss, registerQueues } from '../queue';
-import { resolveEmbedding, resolveLLM, type EmbeddingConfig, type LLMConfig } from '../ai';
+import {
+  resolveEmbedding,
+  resolveLLM,
+  embeddingProviderOptions,
+  type EmbeddingConfig,
+  type LLMConfig,
+} from '../ai';
 
 export async function isInitialized(): Promise<boolean> {
   const db = getDbClient();
@@ -20,7 +26,13 @@ export interface SetupInput {
   password: string;
   locale: 'zh' | 'en';
   llm: { provider: string; baseUrl?: string; apiKey?: string; model: string; cheapModel?: string };
-  embedding: { provider: string; baseUrl?: string; apiKey?: string; model: string };
+  embedding: {
+    provider: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model: string;
+    requestDimensions?: boolean;
+  };
   interestTags: string[];
 }
 
@@ -43,6 +55,7 @@ export async function completeSetup(input: SetupInput): Promise<void> {
       embedBaseUrl: input.embedding.baseUrl ?? null,
       embedApiKey: input.embedding.apiKey ?? null,
       embedModel: input.embedding.model,
+      embedRequestDimensions: input.embedding.requestDimensions ?? false,
       interestTags: input.interestTags,
     })
     .onConflictDoNothing({ target: userSettings.id });
@@ -78,7 +91,11 @@ export async function testEmbedding(
   cfg: EmbeddingConfig,
 ): Promise<{ ok: boolean; dim?: number; error?: string }> {
   try {
-    const { embedding } = await embed({ model: resolveEmbedding(cfg), value: 'ping' });
+    const { embedding } = await embed({
+      model: resolveEmbedding(cfg),
+      value: 'ping',
+      providerOptions: embeddingProviderOptions(cfg),
+    });
     return { ok: true, dim: embedding.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
