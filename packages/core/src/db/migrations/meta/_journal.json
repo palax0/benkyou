@@ -15,6 +15,13 @@
       "when": 1780235145852,
       "tag": "0001_heavy_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780861355395,
+      "tag": "0002_nifty_quasimodo",
+      "breakpoints": true
     }
   ]
 }
