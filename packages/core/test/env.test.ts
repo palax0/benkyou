@@ -42,4 +42,28 @@ describe('env config', () => {
     expect(env.EMBED_DIM).toBe(1536);
     vi.unstubAllEnvs();
   });
+
+  test('DEFAULT_EMBED_REQUEST_DIMENSIONS parses "false" as false, not truthy', async () => {
+    vi.resetModules();
+    vi.stubEnv('DEPLOY_MODE', 'docker');
+    vi.stubEnv('DATABASE_URL', 'postgres://x/y');
+    vi.stubEnv('SESSION_SECRET', 'a'.repeat(32));
+    vi.stubEnv('EMBED_DIM', '1536');
+    vi.stubEnv('DEFAULT_EMBED_REQUEST_DIMENSIONS', 'false');
+    const { env } = await import('../src/config/env.js');
+    expect(env.DEFAULT_EMBED_REQUEST_DIMENSIONS).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  test('DEFAULT_EMBED_REQUEST_DIMENSIONS parses "true" as true', async () => {
+    vi.resetModules();
+    vi.stubEnv('DEPLOY_MODE', 'docker');
+    vi.stubEnv('DATABASE_URL', 'postgres://x/y');
+    vi.stubEnv('SESSION_SECRET', 'a'.repeat(32));
+    vi.stubEnv('EMBED_DIM', '1536');
+    vi.stubEnv('DEFAULT_EMBED_REQUEST_DIMENSIONS', 'true');
+    const { env } = await import('../src/config/env.js');
+    expect(env.DEFAULT_EMBED_REQUEST_DIMENSIONS).toBe(true);
+    vi.unstubAllEnvs();
+  });
 });
