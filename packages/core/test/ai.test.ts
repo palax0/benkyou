@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { resolveLLM, resolveEmbedding } from '../src/ai/provider.js';
+import { resolveLLM, resolveEmbedding, embeddingProviderOptions } from '../src/ai/provider.js';
 
 describe('AI provider factory', () => {
   test('resolves anthropic provider', () => {
@@ -40,5 +40,41 @@ describe('AI provider factory', () => {
     expect(() =>
       resolveEmbedding({ provider: 'ollama', model: 'nomic-embed-text' }),
     ).toThrow(/requires baseUrl/);
+  });
+});
+
+describe('embeddingProviderOptions', () => {
+  test('returns undefined when no dimensions requested', () => {
+    expect(embeddingProviderOptions({ provider: 'openai', model: 'm' })).toBeUndefined();
+  });
+
+  test('openai → { openai: { dimensions } }', () => {
+    expect(embeddingProviderOptions({ provider: 'openai', model: 'm', dimensions: 1536 })).toEqual({
+      openai: { dimensions: 1536 },
+    });
+  });
+
+  test('google → { google: { outputDimensionality } }', () => {
+    expect(embeddingProviderOptions({ provider: 'google', model: 'm', dimensions: 1536 })).toEqual({
+      google: { outputDimensionality: 1536 },
+    });
+  });
+
+  test('openai-compatible → { openaiCompatible: { dimensions } } (non-deprecated camelCase key)', () => {
+    expect(
+      embeddingProviderOptions({ provider: 'openai-compatible', baseUrl: 'http://x', model: 'm', dimensions: 1536 }),
+    ).toEqual({ openaiCompatible: { dimensions: 1536 } });
+  });
+
+  test('ollama → { openaiCompatible: { dimensions } } (same code path as openai-compatible)', () => {
+    expect(
+      embeddingProviderOptions({ provider: 'ollama', baseUrl: 'http://x', model: 'm', dimensions: 1536 }),
+    ).toEqual({ openaiCompatible: { dimensions: 1536 } });
+  });
+
+  test('throws for a provider that cannot take a dimensions request', () => {
+    expect(() => embeddingProviderOptions({ provider: 'unknown', model: 'm', dimensions: 1536 })).toThrow(
+      /does not support dimensions/i,
+    );
   });
 });
