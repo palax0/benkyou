@@ -6,7 +6,7 @@ import { setupAction, type SetupState } from './actions';
 
 const field = 'rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800';
 
-export function SetupForm() {
+export function SetupForm({ embedDim }: { embedDim: number }) {
   const t = useTranslations('setup');
   const [state, action, pending] = useActionState<SetupState, FormData>(setupAction, {});
 
@@ -42,6 +42,11 @@ export function SetupForm() {
         <input name="embedBaseUrl" placeholder={t('baseUrl')} className={field} />
         <input name="embedApiKey" type="password" placeholder={t('apiKey')} className={field} />
         <input name="embedModel" required placeholder={t('model')} className={field} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="embedRequestDimensions" />
+          <span>{t('requestDimensions', { dim: embedDim })}</span>
+        </label>
+        <p className="text-xs text-slate-500">{t('requestDimensionsHelp', { dim: embedDim })}</p>
       </fieldset>
 
       <input name="interestTags" placeholder={t('interests')} className={field} />

@@ -61,9 +61,16 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid' };
   const v = parsed.data;
+  const requestDimensions = fd.get('embedRequestDimensions') === 'on';
 
   const llmCfg = { provider: v.llmProvider, baseUrl: v.llmBaseUrl, apiKey: v.llmApiKey, model: v.llmModel };
-  const embedCfg = { provider: v.embedProvider, baseUrl: v.embedBaseUrl, apiKey: v.embedApiKey, model: v.embedModel };
+  const embedCfg = {
+    provider: v.embedProvider,
+    baseUrl: v.embedBaseUrl,
+    apiKey: v.embedApiKey,
+    model: v.embedModel,
+    dimensions: requestDimensions ? env.EMBED_DIM : undefined,
+  };
 
   // Onboarding forces connectivity tests (spec §14.1: misconfig is the #1 risk).
   const llmTest = await testLLM(llmCfg);
@@ -78,7 +85,7 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
     password: env.INITIAL_PASSWORD,
     locale: v.locale,
     llm: { ...llmCfg, cheapModel: v.llmCheapModel },
-    embedding: embedCfg,
+    embedding: { ...embedCfg, requestDimensions },
     interestTags: (v.interestTags ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   });
   const sourceId = await addRssSource(v.sourceName, v.sourceUrl);
