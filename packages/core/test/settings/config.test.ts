@@ -44,4 +44,28 @@ describe('buildEmbeddingConfig', () => {
   test('throws when embedding not configured', () => {
     expect(() => buildEmbeddingConfig(settings({ embedProvider: null, embedModel: null }))).toThrow(/Embedding not configured/);
   });
+
+  test('derives dimensions from embedDim when embedRequestDimensions is true', () => {
+    const s = settings({
+      embedProvider: 'openai',
+      embedModel: 'text-embedding-3-large',
+      embedBaseUrl: null,
+      embedApiKey: 'k',
+      embedDim: 1536,
+      embedRequestDimensions: true,
+    });
+    expect(buildEmbeddingConfig(s).dimensions).toBe(1536);
+  });
+
+  test('leaves dimensions undefined when embedRequestDimensions is false', () => {
+    const s = settings({
+      embedProvider: 'openai',
+      embedModel: 'text-embedding-3-small',
+      embedBaseUrl: null,
+      embedApiKey: 'k',
+      embedDim: 1536,
+      embedRequestDimensions: false,
+    });
+    expect(buildEmbeddingConfig(s).dimensions).toBeUndefined();
+  });
 });

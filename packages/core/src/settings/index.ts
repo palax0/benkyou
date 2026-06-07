@@ -32,6 +32,7 @@ export function buildEmbeddingConfig(s: UserSettings): EmbeddingConfig {
     baseUrl: s.embedBaseUrl ?? undefined,
     apiKey: s.embedApiKey ?? undefined,
     model: s.embedModel,
+    dimensions: s.embedRequestDimensions ? s.embedDim : undefined,
   };
 }
 
@@ -46,6 +47,7 @@ export interface SettingsPatch {
   embedBaseUrl?: string | null;
   embedApiKey?: string | null;
   embedModel?: string;
+  embedRequestDimensions?: boolean;
   interestTags?: string[];
 }
 
