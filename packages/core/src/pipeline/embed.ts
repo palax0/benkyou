@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { embedMany } from 'ai';
 import { getDbClient, items, itemEmbeddings } from '../db';
 import { env } from '../config/env';
-import { resolveEmbedding } from '../ai';
+import { resolveEmbedding, embeddingProviderOptions } from '../ai';
 import { buildEmbeddingConfig, getUserSettings } from '../settings';
 import { truncateChars } from '../util/text';
 
@@ -23,7 +23,11 @@ export async function embedItem(itemId: string): Promise<void> {
   const docText = body ? `${item.title}\n\n${body}` : item.title;
 
   // One round-trip for both vectors. Order matches values: [doc, title].
-  const { embeddings } = await embedMany({ model, values: [docText, item.title] });
+  const { embeddings } = await embedMany({
+    model,
+    values: [docText, item.title],
+    providerOptions: embeddingProviderOptions(cfg),
+  });
   const [embedding, titleEmbedding] = embeddings;
   if (!embedding || !titleEmbedding) {
     throw new Error(`Embedding provider returned ${embeddings.length} vectors, expected 2`);
@@ -34,7 +38,8 @@ export async function embedItem(itemId: string): Promise<void> {
   if (embedding.length !== env.EMBED_DIM) {
     throw new Error(
       `Embedding dim mismatch: model '${cfg.model}' returned ${embedding.length}, schema expects ${env.EMBED_DIM}. ` +
-        `Fix embed_model to output ${env.EMBED_DIM} dims, or re-init at EMBED_DIM=${embedding.length} (regenerate migration + re-embed; no automated dim-migration script yet).`,
+        `If this is a higher-dimension MRL model, enable "request output dimensions" in settings to truncate to ${env.EMBED_DIM}; ` +
+        `otherwise switch to a model that outputs ${env.EMBED_DIM} dims, or re-init at EMBED_DIM=${embedding.length}.`,
     );
   }
 
