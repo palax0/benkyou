@@ -1,7 +1,9 @@
 import { defineConfig } from '@playwright/test';
 
+// Dedicated e2e database — global-setup TRUNCATEs every run, so it must never
+// point at the dev DB (`…/benkyou`). Override with E2E_DATABASE_URL in CI.
 const DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou';
+  process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou_e2e';
 
 export default defineConfig({
   testDir: './e2e',

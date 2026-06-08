@@ -2,8 +2,10 @@ import postgres from 'postgres';
 import { runMigrations } from '@benkyou/core/db/migrate';
 import { hashPassword } from '@benkyou/core/auth';
 
+// Dedicated e2e database — this file TRUNCATEs every run, so it must never
+// point at the dev DB (`…/benkyou`). Override with E2E_DATABASE_URL in CI.
 const DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou';
+  process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou_e2e';
 
 export default async function globalSetup(): Promise<void> {
   // Assumes `docker compose up -d postgres` is already running (CI does this first).
