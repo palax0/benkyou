@@ -49,9 +49,16 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid' };
   const v = parsed.data;
+  const requestDimensions = fd.get('embedRequestDimensions') === 'on';
 
   const llmCfg = { provider: v.llmProvider, baseUrl: v.llmBaseUrl, apiKey: v.llmApiKey, model: v.llmModel };
-  const embedCfg = { provider: v.embedProvider, baseUrl: v.embedBaseUrl, apiKey: v.embedApiKey, model: v.embedModel };
+  const embedCfg = {
+    provider: v.embedProvider,
+    baseUrl: v.embedBaseUrl,
+    apiKey: v.embedApiKey,
+    model: v.embedModel,
+    dimensions: requestDimensions ? env.EMBED_DIM : undefined,
+  };
 
   const llmTest = await testLLM(llmCfg);
   if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error };
@@ -72,6 +79,7 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     embedBaseUrl: v.embedBaseUrl ?? null,
     embedApiKey: v.embedApiKey ?? null,
     embedModel: v.embedModel,
+    embedRequestDimensions: requestDimensions,
     interestTags: (v.interestTags ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   });
   revalidatePath('/settings');

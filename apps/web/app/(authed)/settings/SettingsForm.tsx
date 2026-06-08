@@ -35,6 +35,11 @@ export function SettingsForm({ settings, embedDim }: { settings: UserSettings; e
       <input name="embedBaseUrl" defaultValue={settings.embedBaseUrl ?? ''} className={field} placeholder="embed base url" />
       <input name="embedApiKey" type="password" defaultValue={settings.embedApiKey ?? ''} className={field} placeholder="embed api key" />
       <input name="embedModel" required defaultValue={settings.embedModel ?? ''} className={field} placeholder="embed model" />
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="embedRequestDimensions" defaultChecked={settings.embedRequestDimensions} />
+        <span>{t('requestDimensions', { dim: embedDim })}</span>
+      </label>
+      <p className="text-xs text-slate-500">{t('requestDimensionsHelp', { dim: embedDim })}</p>
 
       <p className="text-xs text-slate-500">{t('embedDimNote', { dim: embedDim })}</p>
 
