@@ -16,3 +16,4 @@ export const STAGE_HANDLERS: Record<PerItemStage, (itemId: string) => Promise<vo
 export { ingestSource } from './ingest';
 export type { IngestResult } from './ingest';
 export * from './state';
+export * from './status';
