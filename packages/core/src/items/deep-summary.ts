@@ -47,14 +47,15 @@ export async function streamDeepSummaryResponse(id: string): Promise<Response> {
   if (!settings) return new Response('Not configured', { status: 500 });
 
   const lang = settings.locale === 'en' ? 'English' : 'Chinese';
+  const cfg = buildLLMConfig(settings);
   const result = streamText({
-    model: resolveLLM(buildLLMConfig(settings)),
+    model: resolveLLM(cfg),
     prompt: buildDeepSummaryPrompt({ title: item.title, rawContent: item.rawContent }, lang),
-    onFinish: async ({ text, usage }: { text: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }) => {
+    onFinish: async ({ text, usage }: { text: string; usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }) => {
       await saveDeepSummary(id, text); // persist once on completion (spec §6.2)
       await recordUsage(
         { stage: 'deep_summary', itemId: id },
-        { kind: 'llm', model: buildLLMConfig(settings).model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
+        { kind: 'llm', model: cfg.model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
       );
     },
   });
