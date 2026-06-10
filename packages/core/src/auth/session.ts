@@ -25,9 +25,14 @@ export async function createSession(meta: {
   return { id, expiresAt };
 }
 
-// Returns true and slides expiry forward; false (and cleans up) if missing,
-// past sliding expiry, or past the absolute 90d cap.
-export async function validateSession(id: string): Promise<boolean> {
+export interface SessionValidation {
+  valid: boolean;
+  expiresAt?: Date;
+}
+
+// Slides expiry forward and returns the refreshed expiry for cookie renewal;
+// invalidates missing, expired, or absolute-cap sessions.
+export async function validateSession(id: string): Promise<SessionValidation> {
   const db = getDbClient();
   const now = new Date();
   const rows = await db
@@ -36,18 +41,19 @@ export async function validateSession(id: string): Promise<boolean> {
     .where(and(eq(sessions.id, id), gt(sessions.expiresAt, now)))
     .limit(1);
   const session = rows[0];
-  if (!session) return false;
+  if (!session) return { valid: false };
 
   if (session.createdAt && now.getTime() - session.createdAt.getTime() > ABSOLUTE_MS) {
     await db.delete(sessions).where(eq(sessions.id, id));
-    return false;
+    return { valid: false };
   }
 
+  const expiresAt = new Date(now.getTime() + SLIDING_MS);
   await db
     .update(sessions)
-    .set({ lastUsedAt: now, expiresAt: new Date(now.getTime() + SLIDING_MS) })
+    .set({ lastUsedAt: now, expiresAt })
     .where(eq(sessions.id, id));
-  return true;
+  return { valid: true, expiresAt };
 }
 
 export async function destroySession(id: string): Promise<void> {

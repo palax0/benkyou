@@ -33,12 +33,20 @@ describe('sessions', () => {
   test('create → validate true; destroy → validate false', async () => {
     const { id } = await mod.createSession({ ip: '127.0.0.1', userAgent: 'vitest' });
     expect(id).toHaveLength(43); // 32 bytes base64url
-    expect(await mod.validateSession(id)).toBe(true);
+    expect((await mod.validateSession(id)).valid).toBe(true);
     await mod.destroySession(id);
-    expect(await mod.validateSession(id)).toBe(false);
+    expect((await mod.validateSession(id)).valid).toBe(false);
   });
 
   test('unknown id is invalid', async () => {
-    expect(await mod.validateSession('nope')).toBe(false);
+    expect((await mod.validateSession('nope')).valid).toBe(false);
+  });
+
+  test('valid session returns the refreshed expiry for cookie renewal', async () => {
+    const { id } = await mod.createSession({ ip: '127.0.0.1', userAgent: 'vitest' });
+    const result = await mod.validateSession(id);
+    expect(result.valid).toBe(true);
+    expect(result.expiresAt).toBeInstanceOf(Date);
+    expect(result.expiresAt!.getTime()).toBeGreaterThan(Date.now());
   });
 });

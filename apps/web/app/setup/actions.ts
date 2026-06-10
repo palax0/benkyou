@@ -8,6 +8,7 @@ import { createSession } from '@benkyou/core/auth';
 import {
   addRssSource,
   completeSetup,
+  isInitialized,
   testEmbedding,
   testLLM,
   triggerSourceFetch,
@@ -43,6 +44,7 @@ function str(fd: FormData, k: string): string | undefined {
 
 export async function setupAction(_prev: SetupState, fd: FormData): Promise<SetupState> {
   if (!env.INITIAL_PASSWORD) return { error: 'needInitialPassword' };
+  if (await isInitialized()) redirect('/login');
 
   const parsed = Schema.safeParse({
     locale: fd.get('locale'),
@@ -81,13 +83,14 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
     return { error: 'dimMismatch', values: { got: embTest.dim ?? 0, want: env.EMBED_DIM } };
   }
 
-  await completeSetup({
+  const setup = await completeSetup({
     password: env.INITIAL_PASSWORD,
     locale: v.locale,
     llm: { ...llmCfg, cheapModel: v.llmCheapModel },
     embedding: { ...embedCfg, requestDimensions },
     interestTags: (v.interestTags ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   });
+  if (!setup.inserted) redirect('/login');
   const sourceId = await addRssSource(v.sourceName, v.sourceUrl);
   await triggerSourceFetch(sourceId);
 

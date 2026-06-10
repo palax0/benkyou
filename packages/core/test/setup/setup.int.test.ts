@@ -35,13 +35,14 @@ describe('setup', () => {
 
   test('isInitialized flips after completeSetup; embed_dim comes from env', async () => {
     expect(await setup.isInitialized()).toBe(false);
-    await setup.completeSetup({
+    const result = await setup.completeSetup({
       password: 'pw-12345678',
       locale: 'en',
       llm: { provider: 'openai', model: 'gpt-x', cheapModel: 'gpt-x-mini' },
       embedding: { provider: 'openai', model: 'emb-x', requestDimensions: true },
       interestTags: ['llm', 'agents'],
     });
+    expect(result.inserted).toBe(true);
     expect(await setup.isInitialized()).toBe(true);
     const rows = await sql<
       {
@@ -56,6 +57,25 @@ describe('setup', () => {
     expect(rows[0]!.password_hash).toMatch(/^\$argon2id\$/);
     expect(rows[0]!.interest_tags).toEqual(['llm', 'agents']);
     expect(rows[0]!.embed_request_dimensions).toBe(true);
+  });
+
+  test('completeSetup reports an already-initialized install without overwriting settings', async () => {
+    const result = await setup.completeSetup({
+      password: 'pw-overwrite',
+      locale: 'zh',
+      llm: { provider: 'openai', model: 'other' },
+      embedding: { provider: 'openai', model: 'other-emb' },
+      interestTags: ['overwrite'],
+    });
+    expect(result.inserted).toBe(false);
+
+    const rows = await sql<{ locale: string; llm_model: string; interest_tags: string[] }[]>`
+      SELECT locale, llm_model, interest_tags FROM user_settings WHERE id = 1`;
+    expect(rows[0]).toMatchObject({
+      locale: 'en',
+      llm_model: 'gpt-x',
+      interest_tags: ['llm', 'agents'],
+    });
   });
 
   test('addRssSource inserts an rss source and returns its id', async () => {

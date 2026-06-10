@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/session-cookie';
 
 const PUBLIC = ['/login', '/setup', '/api/cron', '/health'];
+const SLIDING_SECONDS = 30 * 24 * 60 * 60;
 
 export function middleware(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
@@ -13,7 +14,15 @@ export function middleware(req: NextRequest): NextResponse {
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  const res = NextResponse.next();
+  res.cookies.set(SESSION_COOKIE, req.cookies.get(SESSION_COOKIE)!.value, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: SLIDING_SECONDS,
+    path: '/',
+  });
+  return res;
 }
 
 export const config = {

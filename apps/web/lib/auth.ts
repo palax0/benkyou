@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from './session-cookie';
 export async function getValidSession(): Promise<boolean> {
   const id = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!id) return false;
-  return validateSession(id);
+  return (await validateSession(id)).valid;
 }
 
 export async function requireAuth(): Promise<void> {

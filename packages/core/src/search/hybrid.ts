@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { embed } from 'ai';
 import { getDbClient } from '../db';
-import { resolveEmbedding } from '../ai';
+import { embeddingProviderOptions, resolveEmbedding } from '../ai';
 import { buildEmbeddingConfig, getUserSettings } from '../settings';
 import { rrfMerge } from './rrf';
 
@@ -60,10 +60,18 @@ export async function hybridSearch(
     LIMIT ${CANDIDATES}
   `)) as unknown as Array<{ id: string }>;
 
+  const cfg = buildEmbeddingConfig(settings);
   const { embedding } = await embed({
-    model: resolveEmbedding(buildEmbeddingConfig(settings)),
+    model: resolveEmbedding(cfg),
     value: query,
+    providerOptions: embeddingProviderOptions(cfg),
   });
+  if (embedding.length !== settings.embedDim) {
+    throw new Error(
+      `Embedding dimension mismatch: got ${embedding.length}, expected ${settings.embedDim}. ` +
+        `If this is a higher-dimension MRL model, enable request output dimensions.`,
+    );
+  }
   const vecLiteral = `[${embedding.join(',')}]`;
   const vecRows = (await db.execute(sql`
     SELECT i.id::text AS id
@@ -93,6 +101,7 @@ export async function hybridSearch(
            ts_headline('simple', coalesce(i.summary, i.title), ${tsq}, 'StartSel=,StopSel=,MaxFragments=1') AS headline
     FROM items i LEFT JOIN sources s ON s.id = i.source_id
     WHERE i.id::text IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+      AND ${where}
   `)) as unknown as Array<{
     id: string;
     title: string;

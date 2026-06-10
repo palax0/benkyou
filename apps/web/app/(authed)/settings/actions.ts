@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { env } from '@benkyou/core/config';
 import { hashPassword } from '@benkyou/core/auth';
-import { setPasswordHash, updateSettings } from '@benkyou/core/settings';
+import { getUserSettings, setPasswordHash, updateSettings } from '@benkyou/core/settings';
 import { testEmbedding, testLLM } from '@benkyou/core/setup';
+import { requireAuth } from '@/lib/auth';
 
 export interface SettingsState {
   ok?: boolean;
@@ -34,6 +35,7 @@ function str(fd: FormData, k: string): string | undefined {
 }
 
 export async function updateSettingsAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
+  await requireAuth();
   const parsed = Schema.safeParse({
     locale: fd.get('locale'),
     llmProvider: fd.get('llmProvider'),
@@ -50,12 +52,16 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid' };
   const v = parsed.data;
   const requestDimensions = fd.get('embedRequestDimensions') === 'on';
+  const current = await getUserSettings();
+  if (!current) return { error: 'notInitialized' };
+  const llmApiKey = v.llmApiKey ?? current.llmApiKey;
+  const embedApiKey = v.embedApiKey ?? current.embedApiKey;
 
-  const llmCfg = { provider: v.llmProvider, baseUrl: v.llmBaseUrl, apiKey: v.llmApiKey, model: v.llmModel };
+  const llmCfg = { provider: v.llmProvider, baseUrl: v.llmBaseUrl, apiKey: llmApiKey ?? undefined, model: v.llmModel };
   const embedCfg = {
     provider: v.embedProvider,
     baseUrl: v.embedBaseUrl,
-    apiKey: v.embedApiKey,
+    apiKey: embedApiKey ?? undefined,
     model: v.embedModel,
     dimensions: requestDimensions ? env.EMBED_DIM : undefined,
   };
@@ -72,12 +78,12 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     locale: v.locale,
     llmProvider: v.llmProvider,
     llmBaseUrl: v.llmBaseUrl ?? null,
-    llmApiKey: v.llmApiKey ?? null,
+    llmApiKey,
     llmModel: v.llmModel,
     llmCheapModel: v.llmCheapModel ?? v.llmModel,
     embedProvider: v.embedProvider,
     embedBaseUrl: v.embedBaseUrl ?? null,
-    embedApiKey: v.embedApiKey ?? null,
+    embedApiKey,
     embedModel: v.embedModel,
     embedRequestDimensions: requestDimensions,
     interestTags: (v.interestTags ?? '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -87,6 +93,7 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
 }
 
 export async function changePasswordAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
+  await requireAuth();
   const pw = String(fd.get('newPassword') ?? '');
   if (pw.length < 8) return { error: 'passwordTooShort' };
   await setPasswordHash(await hashPassword(pw));

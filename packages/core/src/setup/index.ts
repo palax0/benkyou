@@ -36,10 +36,10 @@ export interface SetupInput {
   interestTags: string[];
 }
 
-export async function completeSetup(input: SetupInput): Promise<void> {
+export async function completeSetup(input: SetupInput): Promise<{ inserted: boolean }> {
   const db = getDbClient();
   const passwordHash = await hashPassword(input.password);
-  await db
+  const rows = await db
     .insert(userSettings)
     .values({
       id: 1,
@@ -58,7 +58,9 @@ export async function completeSetup(input: SetupInput): Promise<void> {
       embedRequestDimensions: input.embedding.requestDimensions ?? false,
       interestTags: input.interestTags,
     })
-    .onConflictDoNothing({ target: userSettings.id });
+    .onConflictDoNothing({ target: userSettings.id })
+    .returning({ id: userSettings.id });
+  return { inserted: rows.length > 0 };
 }
 
 export async function addRssSource(name: string, url: string): Promise<string> {

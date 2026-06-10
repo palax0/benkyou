@@ -1,10 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import postgres from 'postgres';
+import { embed } from 'ai';
+
+const mockState = vi.hoisted(() => ({
+  beforeVectorSearch: undefined as undefined | (() => Promise<void>),
+}));
 
 // Query embeds to the unit vector at index 0 (same direction as item A).
 vi.mock('ai', () => ({
   embed: vi.fn(async () => {
+    await mockState.beforeVectorSearch?.();
+    mockState.beforeVectorSearch = undefined;
     const a = Array.from({ length: 1536 }, () => 0);
     a[0] = 1;
     return { embedding: a };
@@ -68,5 +75,26 @@ describe('hybridSearch', () => {
   test('category filter excludes non-matching items (pre-applied)', async () => {
     expect(await hybridSearch('transformers', { category: 'news' })).toHaveLength(0);
     expect((await hybridSearch('transformers', { category: 'knowledge' })).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('passes embedding request dimensions to the query embed call', async () => {
+    await sql`UPDATE user_settings SET embed_request_dimensions = true WHERE id = 1`;
+    await hybridSearch('transformers');
+    expect(vi.mocked(embed)).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        providerOptions: { openai: { dimensions: 1536 } },
+      }),
+    );
+  });
+
+  test('re-applies filters in the final detail fetch after candidate ranking', async () => {
+    await sql`UPDATE items SET category = 'knowledge' WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'`;
+    mockState.beforeVectorSearch = async () => {
+      await sql`UPDATE items SET category = 'news' WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'`;
+    };
+
+    const hits = await hybridSearch('transformers', { category: 'knowledge' });
+
+    expect(hits.map((hit) => hit.id)).not.toContain('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
   });
 });

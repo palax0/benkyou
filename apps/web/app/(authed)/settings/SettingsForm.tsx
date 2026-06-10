@@ -7,7 +7,12 @@ import { updateSettingsAction, type SettingsState } from './actions';
 
 const field = 'rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800';
 
-export function SettingsForm({ settings, embedDim }: { settings: UserSettings; embedDim: number }) {
+export type SettingsFormSettings = Omit<UserSettings, 'llmApiKey' | 'embedApiKey'> & {
+  llmApiKeyConfigured: boolean;
+  embedApiKeyConfigured: boolean;
+};
+
+export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSettings; embedDim: number }) {
   const t = useTranslations('settings');
   const [state, action, pending] = useActionState<SettingsState, FormData>(updateSettingsAction, {});
 
@@ -25,16 +30,26 @@ export function SettingsForm({ settings, embedDim }: { settings: UserSettings; e
         <option value="en">English</option>
       </select>
 
-      <input name="llmProvider" required defaultValue={settings.llmProvider ?? ''} className={field} placeholder="llm provider" />
-      <input name="llmBaseUrl" defaultValue={settings.llmBaseUrl ?? ''} className={field} placeholder="llm base url" />
-      <input name="llmApiKey" type="password" defaultValue={settings.llmApiKey ?? ''} className={field} placeholder="llm api key" />
-      <input name="llmModel" required defaultValue={settings.llmModel ?? ''} className={field} placeholder="llm model" />
-      <input name="llmCheapModel" defaultValue={settings.llmCheapModel ?? ''} className={field} placeholder="llm cheap model" />
+      <input name="llmProvider" required defaultValue={settings.llmProvider ?? ''} className={field} placeholder={t('llmProviderPlaceholder')} />
+      <input name="llmBaseUrl" defaultValue={settings.llmBaseUrl ?? ''} className={field} placeholder={t('llmBaseUrlPlaceholder')} />
+      <input
+        name="llmApiKey"
+        type="password"
+        className={field}
+        placeholder={settings.llmApiKeyConfigured ? t('llmApiKeyConfigured') : t('llmApiKeyPlaceholder')}
+      />
+      <input name="llmModel" required defaultValue={settings.llmModel ?? ''} className={field} placeholder={t('llmModelPlaceholder')} />
+      <input name="llmCheapModel" defaultValue={settings.llmCheapModel ?? ''} className={field} placeholder={t('llmCheapModelPlaceholder')} />
 
-      <input name="embedProvider" required defaultValue={settings.embedProvider ?? ''} className={field} placeholder="embed provider" />
-      <input name="embedBaseUrl" defaultValue={settings.embedBaseUrl ?? ''} className={field} placeholder="embed base url" />
-      <input name="embedApiKey" type="password" defaultValue={settings.embedApiKey ?? ''} className={field} placeholder="embed api key" />
-      <input name="embedModel" required defaultValue={settings.embedModel ?? ''} className={field} placeholder="embed model" />
+      <input name="embedProvider" required defaultValue={settings.embedProvider ?? ''} className={field} placeholder={t('embedProviderPlaceholder')} />
+      <input name="embedBaseUrl" defaultValue={settings.embedBaseUrl ?? ''} className={field} placeholder={t('embedBaseUrlPlaceholder')} />
+      <input
+        name="embedApiKey"
+        type="password"
+        className={field}
+        placeholder={settings.embedApiKeyConfigured ? t('embedApiKeyConfigured') : t('embedApiKeyPlaceholder')}
+      />
+      <input name="embedModel" required defaultValue={settings.embedModel ?? ''} className={field} placeholder={t('embedModelPlaceholder')} />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="embedRequestDimensions" defaultChecked={settings.embedRequestDimensions} />
         <span>{t('requestDimensions', { dim: embedDim })}</span>
@@ -47,7 +62,7 @@ export function SettingsForm({ settings, embedDim }: { settings: UserSettings; e
         name="interestTags"
         defaultValue={(settings.interestTags ?? []).join(', ')}
         className={field}
-        placeholder="interest tags"
+        placeholder={t('interestTagsPlaceholder')}
       />
 
       {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
