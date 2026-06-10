@@ -16,42 +16,45 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
   const t = useTranslations('settings');
   const [state, action, pending] = useActionState<SettingsState, FormData>(updateSettingsAction, {});
 
+  const v = state.values;
   const errorText =
     state.error === 'dimMismatch'
-      ? t('dimMismatch', { got: state.values?.got ?? 0, want: state.values?.want ?? 0 })
+      ? t('dimMismatch', { got: state.dim?.got ?? 0, want: state.dim?.want ?? 0 })
       : state.error
         ? t(state.error as 'llmFailed', { error: state.detail ?? '' })
         : null;
 
   return (
     <form action={action} className="flex flex-col gap-3">
-      <select name="locale" defaultValue={settings.locale} className={field}>
+      <select name="locale" defaultValue={v?.locale ?? settings.locale} className={field}>
         <option value="zh">中文</option>
         <option value="en">English</option>
       </select>
 
-      <input name="llmProvider" required defaultValue={settings.llmProvider ?? ''} className={field} placeholder={t('llmProviderPlaceholder')} />
-      <input name="llmBaseUrl" defaultValue={settings.llmBaseUrl ?? ''} className={field} placeholder={t('llmBaseUrlPlaceholder')} />
+      <input name="llmProvider" required defaultValue={v?.llmProvider ?? settings.llmProvider ?? ''} className={field} placeholder={t('llmProviderPlaceholder')} />
+      <input name="llmBaseUrl" defaultValue={v?.llmBaseUrl ?? settings.llmBaseUrl ?? ''} className={field} placeholder={t('llmBaseUrlPlaceholder')} />
       <input
         name="llmApiKey"
         type="password"
+        defaultValue={v?.llmApiKey ?? ''}
         className={field}
         placeholder={settings.llmApiKeyConfigured ? t('llmApiKeyConfigured') : t('llmApiKeyPlaceholder')}
       />
-      <input name="llmModel" required defaultValue={settings.llmModel ?? ''} className={field} placeholder={t('llmModelPlaceholder')} />
-      <input name="llmCheapModel" defaultValue={settings.llmCheapModel ?? ''} className={field} placeholder={t('llmCheapModelPlaceholder')} />
+      <input name="llmModel" required defaultValue={v?.llmModel ?? settings.llmModel ?? ''} className={field} placeholder={t('llmModelPlaceholder')} />
+      <input name="llmCheapModel" defaultValue={v?.llmCheapModel ?? settings.llmCheapModel ?? ''} className={field} placeholder={t('llmCheapModelPlaceholder')} />
 
-      <input name="embedProvider" required defaultValue={settings.embedProvider ?? ''} className={field} placeholder={t('embedProviderPlaceholder')} />
-      <input name="embedBaseUrl" defaultValue={settings.embedBaseUrl ?? ''} className={field} placeholder={t('embedBaseUrlPlaceholder')} />
+      <input name="embedProvider" required defaultValue={v?.embedProvider ?? settings.embedProvider ?? ''} className={field} placeholder={t('embedProviderPlaceholder')} />
+      <input name="embedBaseUrl" defaultValue={v?.embedBaseUrl ?? settings.embedBaseUrl ?? ''} className={field} placeholder={t('embedBaseUrlPlaceholder')} />
       <input
         name="embedApiKey"
         type="password"
+        defaultValue={v?.embedApiKey ?? ''}
         className={field}
         placeholder={settings.embedApiKeyConfigured ? t('embedApiKeyConfigured') : t('embedApiKeyPlaceholder')}
       />
-      <input name="embedModel" required defaultValue={settings.embedModel ?? ''} className={field} placeholder={t('embedModelPlaceholder')} />
+      <input name="embedModel" required defaultValue={v?.embedModel ?? settings.embedModel ?? ''} className={field} placeholder={t('embedModelPlaceholder')} />
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="embedRequestDimensions" defaultChecked={settings.embedRequestDimensions} />
+        <input type="checkbox" name="embedRequestDimensions" defaultChecked={v?.embedRequestDimensions ?? settings.embedRequestDimensions} />
         <span>{t('requestDimensions', { dim: embedDim })}</span>
       </label>
       <p className="text-xs text-slate-500">{t('requestDimensionsHelp', { dim: embedDim })}</p>
@@ -60,7 +63,7 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
 
       <input
         name="interestTags"
-        defaultValue={(settings.interestTags ?? []).join(', ')}
+        defaultValue={v?.interestTags ?? (settings.interestTags ?? []).join(', ')}
         className={field}
         placeholder={t('interestTagsPlaceholder')}
       />

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   setPasswordHash: vi.fn(),
   hashPassword: vi.fn(async () => 'hashed-new-password'),
-  testLLM: vi.fn(async () => ({ ok: true })),
+  testLLM: vi.fn(async (): Promise<{ ok: boolean; error?: string }> => ({ ok: true })),
   testEmbedding: vi.fn(async () => ({ ok: true, dim: 1536 })),
   getUserSettings: vi.fn(async () => currentSettings),
 }));
@@ -89,6 +89,20 @@ describe('settings server actions', () => {
     await expect(changePasswordAction({}, fd)).rejects.toThrow(redirectError);
 
     expect(mocks.setPasswordHash).not.toHaveBeenCalled();
+  });
+
+  test('an invalid submit returns entered values for repopulation', async () => {
+    mocks.testLLM.mockResolvedValueOnce({ ok: false, error: 'nope' });
+    const { updateSettingsAction } = await import('./actions.js');
+    const fd = settingsForm({ llmModel: 'my-model', embedModel: 'my-embed', llmApiKey: 'typed-key' });
+    const result = await updateSettingsAction({}, fd);
+    expect(result.error).toBe('llmFailed');
+    expect(result.values).toMatchObject({
+      llmProvider: 'openai',
+      llmModel: 'my-model',
+      embedModel: 'my-embed',
+      llmApiKey: 'typed-key',
+    });
   });
 
   test('blank API key fields preserve stored keys server-side', async () => {

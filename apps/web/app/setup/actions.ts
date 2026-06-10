@@ -15,10 +15,28 @@ import {
 } from '@benkyou/core/setup';
 import { SESSION_COOKIE } from '@/lib/session-cookie';
 
+export interface SetupFormValues {
+  locale: string;
+  llmProvider: string;
+  llmBaseUrl: string;
+  llmApiKey: string;
+  llmModel: string;
+  llmCheapModel: string;
+  embedProvider: string;
+  embedBaseUrl: string;
+  embedApiKey: string;
+  embedModel: string;
+  embedRequestDimensions: boolean;
+  interestTags: string;
+  sourceName: string;
+  sourceUrl: string;
+}
+
 export interface SetupState {
   error?: string;
   detail?: string;
-  values?: { got: number; want: number };
+  dim?: { got: number; want: number };
+  values?: SetupFormValues;
 }
 
 const Schema = z.object({
@@ -46,6 +64,23 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
   if (!env.INITIAL_PASSWORD) return { error: 'needInitialPassword' };
   if (await isInitialized()) redirect('/login');
 
+  const values: SetupFormValues = {
+    locale: String(fd.get('locale') ?? 'zh'),
+    llmProvider: String(fd.get('llmProvider') ?? ''),
+    llmBaseUrl: String(fd.get('llmBaseUrl') ?? ''),
+    llmApiKey: String(fd.get('llmApiKey') ?? ''),
+    llmModel: String(fd.get('llmModel') ?? ''),
+    llmCheapModel: String(fd.get('llmCheapModel') ?? ''),
+    embedProvider: String(fd.get('embedProvider') ?? ''),
+    embedBaseUrl: String(fd.get('embedBaseUrl') ?? ''),
+    embedApiKey: String(fd.get('embedApiKey') ?? ''),
+    embedModel: String(fd.get('embedModel') ?? ''),
+    embedRequestDimensions: fd.get('embedRequestDimensions') === 'on',
+    interestTags: String(fd.get('interestTags') ?? ''),
+    sourceName: String(fd.get('sourceName') ?? ''),
+    sourceUrl: String(fd.get('sourceUrl') ?? ''),
+  };
+
   const parsed = Schema.safeParse({
     locale: fd.get('locale'),
     llmProvider: fd.get('llmProvider'),
@@ -61,7 +96,7 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
     sourceName: fd.get('sourceName'),
     sourceUrl: fd.get('sourceUrl'),
   });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid' };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid', values };
   const v = parsed.data;
   const requestDimensions = fd.get('embedRequestDimensions') === 'on';
 
@@ -76,11 +111,11 @@ export async function setupAction(_prev: SetupState, fd: FormData): Promise<Setu
 
   // Onboarding forces connectivity tests (spec §14.1: misconfig is the #1 risk).
   const llmTest = await testLLM(llmCfg);
-  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error };
+  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error, values };
   const embTest = await testEmbedding(embedCfg);
-  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error };
+  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error, values };
   if (embTest.dim !== env.EMBED_DIM) {
-    return { error: 'dimMismatch', values: { got: embTest.dim ?? 0, want: env.EMBED_DIM } };
+    return { error: 'dimMismatch', dim: { got: embTest.dim ?? 0, want: env.EMBED_DIM }, values };
   }
 
   const setup = await completeSetup({
