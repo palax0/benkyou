@@ -119,4 +119,49 @@ describe('full pipeline: pending → done', () => {
       WHERE search_vec @@ plainto_tsquery('simple', 'model')`;
     expect(sv[0]!.n).toBe(1);
   });
+
+  test('embed stage forwards dimensions providerOptions when the toggle is on', async () => {
+    const { embedMany } = await import('ai');
+    const { embedItem } = await import('../../src/pipeline/embed.js');
+
+    await sql`UPDATE user_settings SET embed_request_dimensions = true WHERE id = 1`;
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO items (url, url_hash, title, content_type, raw_content, state)
+      VALUES ('https://news.test/dim-1', 'dim-hash-1', 'Dim Test', 'article', 'body text', 'extracted')
+      RETURNING id`;
+    const itemId = inserted[0]!.id;
+
+    vi.mocked(embedMany).mockClear();
+    await embedItem(itemId);
+
+    expect(vi.mocked(embedMany)).toHaveBeenCalledWith(
+      expect.objectContaining({ providerOptions: { openai: { dimensions: 1536 } } }),
+    );
+
+    // Restore for any later tests / cross-test isolation. Drop our row too, so the
+    // toHaveLength(1) assertion above stays valid regardless of test ordering/shuffle.
+    await sql`UPDATE user_settings SET embed_request_dimensions = false WHERE id = 1`;
+    await sql`DELETE FROM items WHERE url_hash = 'dim-hash-1'`;
+  });
+
+  test('embed stage omits providerOptions when the toggle is off', async () => {
+    const { embedMany } = await import('ai');
+    const { embedItem } = await import('../../src/pipeline/embed.js');
+
+    await sql`UPDATE user_settings SET embed_request_dimensions = false WHERE id = 1`;
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO items (url, url_hash, title, content_type, raw_content, state)
+      VALUES ('https://news.test/dim-2', 'dim-hash-2', 'Dim Test', 'article', 'body text', 'extracted')
+      RETURNING id`;
+    const itemId = inserted[0]!.id;
+
+    vi.mocked(embedMany).mockClear();
+    await embedItem(itemId);
+
+    expect(vi.mocked(embedMany)).toHaveBeenCalledWith(
+      expect.objectContaining({ providerOptions: undefined }),
+    );
+
+    await sql`DELETE FROM items WHERE url_hash = 'dim-hash-2'`;
+  });
 });

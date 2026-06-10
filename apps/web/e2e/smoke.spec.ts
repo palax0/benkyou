@@ -8,7 +8,7 @@ test('GET /health returns ok', async ({ request }) => {
   expect(body.db).toBe(true);
 });
 
-test('home page renders', async ({ page }) => {
+test('home redirects unauthenticated users to /login', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('h1')).toHaveText('Benkyou');
+  await expect(page).toHaveURL(/\/login/);
 });

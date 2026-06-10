@@ -27,7 +27,7 @@ third one.
 
 `.env`'s `DATABASE_URL` uses the compose **service name** `postgres`, which only
 resolves *inside* the compose network (web/worker containers). **Host-run**
-scripts (`pnpm migrate`, seeds, `scripts/migrate-embeddings.ts`) run in your
+scripts (`pnpm migrate`, seeds) run in your
 shell, where `postgres` does not resolve (`getaddrinfo EAI_AGAIN postgres`).
 Compose publishes `5432:5432`, so override the host inline:
 

@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "embed_request_dimensions" boolean DEFAULT false NOT NULL;

@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./auth": "./src/auth/index.ts",
     "./db": "./src/db/index.ts",
     "./db/migrate": "./src/db/migrate.ts",
     "./ai": "./src/ai/index.ts",
@@ -14,7 +15,10 @@
     "./pipeline": "./src/pipeline/index.ts",
     "./settings": "./src/settings/index.ts",
     "./sources": "./src/sources/index.ts",
-    "./config": "./src/config/env.ts"
+    "./setup": "./src/setup/index.ts",
+    "./config": "./src/config/env.ts",
+    "./items": "./src/items/index.ts",
+    "./search": "./src/search/index.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts",
@@ -22,6 +26,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "ai": "^6.0.0",
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/openai": "^3.0.0",

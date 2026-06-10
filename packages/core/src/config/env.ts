@@ -21,6 +21,10 @@ const Schema = z.object({
   DEFAULT_EMBED_BASE_URL: z.string().optional(),
   DEFAULT_EMBED_API_KEY: z.string().optional(),
   DEFAULT_EMBED_MODEL: z.string().optional(),
+  DEFAULT_EMBED_REQUEST_DIMENSIONS: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 
   DEFAULT_WHISPER_BASE_URL: z.string().optional(),
   DEFAULT_WHISPER_API_KEY: z.string().optional(),

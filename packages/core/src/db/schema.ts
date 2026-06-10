@@ -53,6 +53,7 @@ export const userSettings = pgTable('user_settings', {
   embedApiKey: text('embed_api_key'),
   embedModel: text('embed_model'),
   embedDim: integer('embed_dim').notNull(),
+  embedRequestDimensions: boolean('embed_request_dimensions').notNull().default(false),
 
   whisperBaseUrl: text('whisper_base_url'),
   whisperApiKey: text('whisper_api_key'),

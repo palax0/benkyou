@@ -11,7 +11,11 @@ export interface ProviderConfig {
   model: string;
 }
 export type LLMConfig = ProviderConfig;
-export type EmbeddingConfig = ProviderConfig;
+export interface EmbeddingConfig extends ProviderConfig {
+  // When set, ask the model to emit exactly this many dims (Matryoshka truncation).
+  // Always equals user_settings.embed_dim — the vector(N) column is frozen.
+  dimensions?: number;
+}
 
 // `LanguageModel` in ai v6 is `GlobalProviderModelId | LanguageModelV3 | LanguageModelV2`.
 // The string branch (GlobalProviderModelId) has no `.modelId`. All concrete provider
@@ -62,5 +66,29 @@ export function resolveEmbedding(cfg: EmbeddingConfig): EmbeddingModel {
       return createGoogleGenerativeAI({ apiKey: cfg.apiKey }).embedding(cfg.model);
     default:
       throw new Error(`Unknown embedding provider: ${cfg.provider}`);
+  }
+}
+
+// Per-request output-dimension parameter. Provider key names differ:
+//   openai             → openai.dimensions
+//   google             → google.outputDimensionality
+//   openai-compatible  → openaiCompatible.dimensions  (camelCase; the raw 'openai-compatible'
+//   ollama               key is deprecated in @ai-sdk/openai-compatible and warns at runtime.
+//                          The camelCase key is read unconditionally for both names.)
+// Re-verify the openaiCompatible key if @ai-sdk/openai-compatible is upgraded past 2.0.48.
+export function embeddingProviderOptions(
+  cfg: EmbeddingConfig,
+): Record<string, Record<string, number>> | undefined {
+  if (cfg.dimensions == null) return undefined;
+  switch (cfg.provider) {
+    case 'openai':
+      return { openai: { dimensions: cfg.dimensions } };
+    case 'google':
+      return { google: { outputDimensionality: cfg.dimensions } };
+    case 'openai-compatible':
+    case 'ollama':
+      return { openaiCompatible: { dimensions: cfg.dimensions } };
+    default:
+      throw new Error(`Embedding provider does not support dimensions request: ${cfg.provider}`);
   }
 }
