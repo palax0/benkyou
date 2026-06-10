@@ -62,7 +62,7 @@ export async function beginStage(itemId: string, stage: PerItemStage): Promise<n
   const db = getDbClient();
   const rows = await db
     .update(items)
-    .set({ currentStage: stage, attempts: sql`${items.attempts} + 1` })
+    .set({ currentStage: stage, attempts: sql`${items.attempts} + 1`, updatedAt: sql`now()` })
     .where(eq(items.id, itemId))
     .returning({ attempts: items.attempts });
   return rows[0]?.attempts ?? 0;
@@ -78,6 +78,7 @@ export async function completeStage(itemId: string, stage: PerItemStage): Promis
       currentStage: NEXT_STAGE[stage],
       attempts: 0,
       lastError: null,
+      updatedAt: sql`now()`,
     })
     .where(eq(items.id, itemId));
 }
@@ -88,12 +89,12 @@ export async function recordFailure(itemId: string, error: unknown): Promise<voi
   const message = error instanceof Error ? error.message : String(error);
   await db
     .update(items)
-    .set({ lastError: message.slice(0, 2000) })
+    .set({ lastError: message.slice(0, 2000), updatedAt: sql`now()` })
     .where(eq(items.id, itemId));
 }
 
 /** Terminal failure (called by the dead-letter handler after pg-boss exhausts retries). */
 export async function markFailed(itemId: string, stage: PerItemStage): Promise<void> {
   const db = getDbClient();
-  await db.update(items).set({ state: 'failed', currentStage: stage }).where(eq(items.id, itemId));
+  await db.update(items).set({ state: 'failed', currentStage: stage, updatedAt: sql`now()` }).where(eq(items.id, itemId));
 }
