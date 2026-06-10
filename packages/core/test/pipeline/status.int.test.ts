@@ -14,6 +14,7 @@ describe('pipeline status queries', () => {
   let ORPHAN_ID: string;
   let IN_QUEUE_ID: string;
   let FAILED_ID: string;
+  let DONE_ID: string;
 
   beforeAll(async () => {
     container = await new GenericContainer('pgvector/pgvector:pg16')
@@ -47,9 +48,11 @@ describe('pipeline status queries', () => {
 
     // Seed items of various states
     // 'done' item
-    await sql`
+    const doneRows = await sql<{ id: string }[]>`
       INSERT INTO items (url, url_hash, title, content_type, state)
-      VALUES ('https://x.test/done', 'done-hash', 'Done Item', 'article', 'done')`;
+      VALUES ('https://x.test/done', 'done-hash', 'Done Item', 'article', 'done')
+      RETURNING id`;
+    DONE_ID = doneRows[0]!.id;
 
     // 'failed' item with current_stage and last_error
     const failedRows = await sql<{ id: string }[]>`
@@ -75,10 +78,16 @@ describe('pipeline status queries', () => {
     // Enqueue an embed job for IN_QUEUE_ID so it is NOT an orphan
     await enqueueStage(boss, 'embed', IN_QUEUE_ID);
 
-    // Seed ai_usage row for today with stage='embed', totalTokens=42
+    // Seed ai_usage row for today with stage='embed', totalTokens=42 (no item_id — agent call)
     await sql`
       INSERT INTO ai_usage (stage, kind, model, input_tokens, output_tokens, total_tokens, created_at)
       VALUES ('embed', 'embedding', 'emb-x', 10, null, 42, now())`;
+
+    // Seed ai_usage row tied to DONE_ID so getTokenTopItems has a per-item row to return.
+    // Use stage='score' (not 'embed') to avoid inflating the getTokenSummary 'embed' total.
+    await sql`
+      INSERT INTO ai_usage (item_id, stage, kind, model, input_tokens, output_tokens, total_tokens, created_at)
+      VALUES (${DONE_ID}, 'score', 'llm', 'gpt-x', 20, 10, 99, now())`;
 
     status = await import('../../src/pipeline/status.js');
   }, 180_000);
@@ -125,5 +134,12 @@ describe('pipeline status queries', () => {
       settingsDim: 1536,
       consistent: true,
     });
+  });
+
+  test('getTokenTopItems returns per-item token totals', async () => {
+    const top = await status.getTokenTopItems(10);
+    const row = top.find((r) => r.id === DONE_ID);
+    expect(row).toBeTruthy();
+    expect(row!.totalTokens).toBe(99);
   });
 });

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDbClient, items, sources, aiUsage } from '../db';
 import { env } from '../config/env';
 
@@ -118,15 +118,18 @@ export async function getTokenSummary(): Promise<{ today: StageTokens[]; week: S
 
 export async function getTokenTopItems(limit = 10): Promise<TokenItemRow[]> {
   const db = getDbClient();
-  const r = await db.execute(sql`
-    SELECT u.item_id AS id, i.title, sum(u.total_tokens)::int AS "totalTokens"
-    FROM ai_usage u
-    LEFT JOIN items i ON i.id = u.item_id
-    WHERE u.created_at >= now() - interval '7 days' AND u.item_id IS NOT NULL
-    GROUP BY u.item_id, i.title
-    ORDER BY sum(u.total_tokens) DESC NULLS LAST
-    LIMIT ${limit}`);
-  return r as unknown as TokenItemRow[];
+  return db
+    .select({
+      id: aiUsage.itemId,
+      title: items.title,
+      totalTokens: sql<number>`coalesce(sum(${aiUsage.totalTokens}),0)::int`,
+    })
+    .from(aiUsage)
+    .leftJoin(items, eq(items.id, aiUsage.itemId))
+    .where(and(gte(aiUsage.createdAt, sql`now() - interval '7 days'`), isNotNull(aiUsage.itemId)))
+    .groupBy(aiUsage.itemId, items.title)
+    .orderBy(desc(sql`sum(${aiUsage.totalTokens})`))
+    .limit(limit);
 }
 
 export async function getTokenNoItem(): Promise<number> {
@@ -147,8 +150,10 @@ export async function getDimensionDrift(): Promise<DimensionDrift> {
   const columnDim = (colRes as unknown as Array<{ dim: number }>)[0]?.dim ?? null;
   const setRes = await db.execute(sql`SELECT embed_dim FROM user_settings WHERE id = 1`);
   const settingsDim = (setRes as unknown as Array<{ embed_dim: number }>)[0]?.embed_dim ?? null;
-  const dims = [env.EMBED_DIM, columnDim, settingsDim].filter((d): d is number => typeof d === 'number');
-  const consistent = dims.every((d) => d === dims[0]);
+  // A missing column/settings dimension is itself a drift condition (e.g. migrations not run),
+  // so consistency requires all three to be present AND equal.
+  const dims = [env.EMBED_DIM, columnDim, settingsDim];
+  const consistent = dims.every((d): d is number => typeof d === 'number' && d === env.EMBED_DIM);
   return { envDim: env.EMBED_DIM, columnDim: columnDim != null ? Number(columnDim) : null, settingsDim, consistent };
 }
 
