@@ -22,16 +22,19 @@ export async function listSourcesWithStats(): Promise<SourceWithStats[]> {
       id: sources.id,
       type: sources.type,
       name: sources.name,
-      // jsonb extraction: column ref uses raw string; drizzle ${col} in sql<>
-      // would bind as a value parameter, not emit the column name.
+      // jsonb ->> operator requires raw SQL; ${sources.config} in sql<> emits just
+      // "config" without the table qualifier, which is correct here since the outer
+      // FROM has no ambiguity.
       url: sql<string>`sources.config ->> 'url'`,
       weight: sources.weight,
       enabled: sources.enabled,
       pollInterval: sources.pollInterval,
       lastPolledAt: sources.lastPolledAt,
       lastFetchError: sources.lastFetchError,
-      // Correlated subquery: column ref must use sql.raw; drizzle treats ${column}
-      // as a bound value parameter inside sql<> template literals.
+      // Correlated subquery: ${sources.id} in sql<> emits just "id" (no table prefix),
+      // which PostgreSQL resolves as the subquery's inner column — the correlation
+      // breaks and count returns 0. The table-qualified literal `sources.id` is the
+      // only form that correctly refers to the outer row.
       itemCount: sql<number>`(SELECT count(*)::int FROM items WHERE items.source_id = sources.id)`,
     })
     .from(sources)
