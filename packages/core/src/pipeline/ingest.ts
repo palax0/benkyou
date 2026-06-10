@@ -16,12 +16,20 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
   if (!source.enabled) return { fetched: 0, inserted: [] };
 
   const adapter = getAdapter(source.type);
-  // Intentional asymmetry with extract's degrade-on-error: a source we can't
-  // fetch/parse throws here, so the ingest job retries (and lastPolledAt is left
-  // unadvanced → still due). A transient feed outage must not silently skip a
-  // poll. Per-item extraction failures, by contrast, degrade so one bad article
-  // doesn't block the rest.
-  const raw = await adapter.fetchItems(source.config as Record<string, unknown>);
+  let raw;
+  try {
+    // Intentional asymmetry with extract's degrade-on-error: a source we can't
+    // fetch/parse throws here, so the ingest job retries (and lastPolledAt is left
+    // unadvanced → still due). A transient feed outage must not silently skip a
+    // poll. Per-item extraction failures, by contrast, degrade so one bad article
+    // doesn't block the rest.
+    // We persist the error message before re-throwing so /sources can show it.
+    raw = await adapter.fetchItems(source.config as Record<string, unknown>);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await db.update(sources).set({ lastFetchError: message.slice(0, 1000) }).where(eq(sources.id, source.id));
+    throw err;
+  }
 
   const inserted: string[] = [];
   for (const r of raw) {
@@ -48,6 +56,9 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
     if (rows[0]) inserted.push(rows[0].id);
   }
 
-  await db.update(sources).set({ lastPolledAt: new Date() }).where(eq(sources.id, source.id));
+  await db
+    .update(sources)
+    .set({ lastPolledAt: new Date(), lastFetchError: null })
+    .where(eq(sources.id, source.id));
   return { fetched: raw.length, inserted };
 }
