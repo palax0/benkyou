@@ -4,9 +4,7 @@ import { getDbClient, items, itemEmbeddings } from '../db';
 import { env } from '../config/env';
 import { resolveEmbedding, embeddingProviderOptions } from '../ai';
 import { buildEmbeddingConfig, getUserSettings } from '../settings';
-import { truncateChars } from '../util/text';
-
-const MAX_CONTENT_CHARS = 16_000; // ~4k tokens of body text (spec §6.2 embed)
+import { buildEmbeddingInputs } from './embedding-input';
 
 export async function embedItem(itemId: string): Promise<void> {
   const db = getDbClient();
@@ -19,13 +17,12 @@ export async function embedItem(itemId: string): Promise<void> {
   const cfg = buildEmbeddingConfig(settings);
   const model = resolveEmbedding(cfg);
 
-  const body = truncateChars(item.rawContent, MAX_CONTENT_CHARS);
-  const docText = body ? `${item.title}\n\n${body}` : item.title;
+  const { docText, titleText } = buildEmbeddingInputs(item);
 
   // One round-trip for both vectors. Order matches values: [doc, title].
   const { embeddings } = await embedMany({
     model,
-    values: [docText, item.title],
+    values: [docText, titleText],
     providerOptions: embeddingProviderOptions(cfg),
   });
   const [embedding, titleEmbedding] = embeddings;
