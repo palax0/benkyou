@@ -110,4 +110,9 @@ describe('retryItem', () => {
     await retry.retryItem(ORPHAN_ID);
     expect((await retry.retryItem(ORPHAN_ID)).requeued).toBe(true);
   });
+
+  test('retryItem on a non-existent item is not-retryable', async () => {
+    const res = await retry.retryItem('00000000-0000-0000-0000-000000000000');
+    expect(res).toEqual({ requeued: false, reason: 'not-retryable' });
+  });
 });
