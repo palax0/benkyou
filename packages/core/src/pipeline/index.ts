@@ -17,3 +17,4 @@ export { ingestSource } from './ingest';
 export type { IngestResult } from './ingest';
 export * from './state';
 export * from './status';
+export * from './retry';
