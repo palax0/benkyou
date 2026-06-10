@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { getDbClient, items } from '../db';
-import { resolveLLM } from '../ai';
+import { resolveLLM, recordUsage } from '../ai';
 import { buildLLMConfig, getUserSettings } from '../settings';
 import { truncateChars } from '../util/text';
 
@@ -52,7 +52,11 @@ export async function scoreItem(itemId: string): Promise<void> {
     interestTags: settings.interestTags ?? [],
   });
 
-  const { object } = await generateObject({ model: resolveLLM(cfg), schema: scoreSchema, prompt });
+  const { object, usage } = await generateObject({ model: resolveLLM(cfg), schema: scoreSchema, prompt });
+  await recordUsage(
+    { stage: 'score', itemId },
+    { kind: 'llm', model: cfg.model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
+  );
 
   // numeric columns are strings in Drizzle's postgres-js driver.
   await db

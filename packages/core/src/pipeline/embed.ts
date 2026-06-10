@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { embedMany } from 'ai';
 import { getDbClient, items, itemEmbeddings } from '../db';
 import { env } from '../config/env';
-import { resolveEmbedding, embeddingProviderOptions } from '../ai';
+import { resolveEmbedding, embeddingProviderOptions, recordUsage } from '../ai';
 import { buildEmbeddingConfig, getUserSettings } from '../settings';
 import { buildEmbeddingInputs } from './embedding-input';
 
@@ -20,11 +20,16 @@ export async function embedItem(itemId: string): Promise<void> {
   const { docText, titleText } = buildEmbeddingInputs(item);
 
   // One round-trip for both vectors. Order matches values: [doc, title].
-  const { embeddings } = await embedMany({
+  const { embeddings, usage } = await embedMany({
     model,
     values: [docText, titleText],
     providerOptions: embeddingProviderOptions(cfg),
   });
+  // Record before the dim guard: usage is real even if the guard later throws.
+  await recordUsage(
+    { stage: 'embed', itemId },
+    { kind: 'embedding', model: cfg.model, inputTokens: usage?.tokens ?? null, outputTokens: null, totalTokens: usage?.tokens ?? null },
+  );
   const [embedding, titleEmbedding] = embeddings;
   if (!embedding || !titleEmbedding) {
     throw new Error(`Embedding provider returned ${embeddings.length} vectors, expected 2`);

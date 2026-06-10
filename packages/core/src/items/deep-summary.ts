@@ -2,6 +2,7 @@ import { streamText } from 'ai';
 import { eq } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
 import { resolveLLM } from '../ai/provider';
+import { recordUsage } from '../ai/usage';
 import { buildLLMConfig, getUserSettings } from '../settings';
 import { getItemForUser } from './queries';
 
@@ -49,8 +50,12 @@ export async function streamDeepSummaryResponse(id: string): Promise<Response> {
   const result = streamText({
     model: resolveLLM(buildLLMConfig(settings)),
     prompt: buildDeepSummaryPrompt({ title: item.title, rawContent: item.rawContent }, lang),
-    onFinish: async ({ text }: { text: string }) => {
+    onFinish: async ({ text, usage }: { text: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }) => {
       await saveDeepSummary(id, text); // persist once on completion (spec §6.2)
+      await recordUsage(
+        { stage: 'deep_summary', itemId: id },
+        { kind: 'llm', model: buildLLMConfig(settings).model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
+      );
     },
   });
   return result.toTextStreamResponse();

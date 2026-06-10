@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { generateText } from 'ai';
 import { getDbClient, items } from '../db';
-import { resolveLLM } from '../ai';
+import { resolveLLM, recordUsage } from '../ai';
 import { buildLLMConfig, getUserSettings } from '../settings';
 import { truncateChars } from '../util/text';
 
@@ -23,7 +23,11 @@ export async function summarizeItem(itemId: string): Promise<void> {
     truncateChars(item.rawContent, 6000) || '(no body text; summarize from the title)',
   ].join('\n');
 
-  const { text } = await generateText({ model: resolveLLM(cfg), prompt });
+  const { text, usage } = await generateText({ model: resolveLLM(cfg), prompt });
+  await recordUsage(
+    { stage: 'summary', itemId },
+    { kind: 'llm', model: cfg.model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
+  );
   // Writing summary also refreshes the generated search_vec column automatically.
   await db.update(items).set({ summary: text.trim() }).where(eq(items.id, itemId));
 }
