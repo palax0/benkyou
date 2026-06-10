@@ -3,7 +3,6 @@ import { embed, generateText } from 'ai';
 import { getDbClient, sources, userSettings } from '../db';
 import { env } from '../config/env';
 import { hashPassword } from '../auth';
-import { enqueueIngest, getBoss, registerQueues } from '../queue';
 import {
   resolveEmbedding,
   resolveLLM,
@@ -74,11 +73,7 @@ export async function addRssSource(name: string, url: string): Promise<string> {
   return id;
 }
 
-export async function triggerSourceFetch(sourceId: string): Promise<void> {
-  const boss = await getBoss();
-  await registerQueues(boss, 3); // idempotent; ensures the ingest queue exists before send
-  await enqueueIngest(boss, sourceId);
-}
+export { triggerSourceFetch } from '../sources/manage';
 
 export async function testLLM(cfg: LLMConfig): Promise<{ ok: boolean; error?: string }> {
   try {
