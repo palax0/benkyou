@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { FeedItem } from '@benkyou/core/items';
+import { SourceBadge } from '@/components/SourceBadge';
 
 const TYPE_ICON: Record<string, string> = {
   article: '📄',
@@ -13,7 +14,7 @@ export function ItemCard({ item }: { item: FeedItem }) {
     <article className="rounded border border-slate-200 p-3 dark:border-slate-700">
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span>{TYPE_ICON[item.contentType] ?? '📄'}</span>
-        {item.sourceName ? <span>{item.sourceName}</span> : null}
+        <SourceBadge id={item.sourceId} name={item.sourceName} />
         {item.category ? <span>· {item.category === 'news' ? '📰' : '📚'}</span> : null}
         {item.publishedAt ? <span>· {new Date(item.publishedAt).toLocaleDateString()}</span> : null}
       </div>
