@@ -86,6 +86,6 @@ export async function deleteSource(id: string, opts: { cascade: boolean }): Prom
 // one-off ingest for a source; idempotent registerQueues ensures the queue exists.
 export async function triggerSourceFetch(sourceId: string): Promise<void> {
   const boss = await getBoss();
-  await registerQueues(boss, 3); // idempotent; ensures the ingest queue exists before send
+  await registerQueues(boss); // idempotent; ensures the ingest queue exists before send
   await enqueueIngest(boss, sourceId);
 }

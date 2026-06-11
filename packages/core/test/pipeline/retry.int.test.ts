@@ -40,7 +40,7 @@ describe('retryItem', () => {
     } = await import('../../src/queue/index.js');
     closeBoss = _closeBoss;
     boss = await getBoss();
-    await registerQueues(boss, 3);
+    await registerQueues(boss);
 
     ({ closeDbClient } = await import('../../src/db/client.js'));
 

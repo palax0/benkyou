@@ -1,5 +1,4 @@
 import { getBoss } from './boss';
-import { getUserSettings } from '../settings';
 import { PER_ITEM_STAGES } from '../pipeline';
 import {
   DEAD_LETTER_QUEUE,
@@ -21,8 +20,7 @@ export interface BatchResult {
 // single invocation.
 export async function processBatch(maxJobs: number): Promise<BatchResult> {
   const boss = await getBoss();
-  const settings = await getUserSettings();
-  await registerQueues(boss, settings?.pipelineMaxAttempts ?? 3);
+  await registerQueues(boss);
   await checkDueSources(boss);
 
   const queues = [INGEST_QUEUE, ...PER_ITEM_STAGES, DEAD_LETTER_QUEUE] as const;

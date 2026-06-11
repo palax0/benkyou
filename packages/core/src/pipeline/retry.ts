@@ -44,7 +44,7 @@ export async function retryItem(itemId: string): Promise<RetryResult> {
     .where(eq(items.id, itemId));
 
   const boss = await getBoss();
-  await registerQueues(boss, 3);
+  await registerQueues(boss);
   await enqueueStage(boss, stage, itemId);
   return { requeued: true };
 }
