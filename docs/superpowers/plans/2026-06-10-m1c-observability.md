@@ -2608,3 +2608,17 @@ git commit -m "chore: M1c final lint/i18n/test cleanup"
 **Type consistency:** `FeedItem.sourceId` added in Task 7, consumed in Task 15 (`SourceBadge`); `SourceWithStats` from Task 6 consumed in Task 13; `getPipelineStatus` return shape from Task 8 consumed field-for-field in Task 14; `retryItem` signature from Task 9 consumed in Task 14's action; `SettingsState.dim` rename (was `values:{got,want}`) propagated to `SettingsForm.tsx` and its unit test (Task 11).
 
 **Open risk to watch:** e2e flow 1 depends on the structured-output provider mock for the `score` stage (Phase H note). If the openai-compatible provider uses tool-mode rather than `response_format` for `generateObject`, extend the mock to emit a `tool_calls` response, or apply the seed-a-done-item fallback.
+
+---
+
+## Post-Review 遗留（2026-06-12 code review）
+
+Review 的 Critical=0；Important×3 与 Minor #4/#5/#6/#11 已在本分支修复（`registerQueues` updateQueue、search embedding 记账、e2e 干净环境 7/7、deleteSource 事务、action id 校验、注释措辞）。以下为**未修复**的遗留，M2 规划时处理或显式再推迟：
+
+1. **`retryItemAction` 丢弃 `RetryResult`**（`apps/web/app/(authed)/admin/jobs/actions.ts`）：`requeued: false` 时用户无反馈。当前 UI 只对 failed/orphan 渲染按钮所以影响小，但 `reason` 字段算出来又扔掉了。修法：action 返回 state + 面板显示一条 toast/提示。
+2. **`AutoRefresh` 硬编码 `jobs` i18n namespace**（`apps/web/components/AutoRefresh.tsx`）：组件同时挂在 `/sources`，恰好 key 通用才没出错。修法：namespace 作 prop 或把共享 key 移到公共 namespace。
+3. **`deep_summary` 的 usage 记录无测试**（`usage-points.int.test.ts` 只覆盖 embed/score/summary）：`onFinish` 路径在 AI SDK 升级时最容易静默坏。M2 做 wrapper 层收口时一并补（收口时记得删调用点埋点防双计，见 spec §3.1 记账位置注）。
+
+已在 spec 有记录、无需重复跟踪：token 面板"今日"按 DB 时区（UTC，spec 推迟时区到 M3）；`getOrphans` 每 5s 的 jsonb `NOT EXISTS` 扫描成本（单用户规模可接受，job retention 拉长时重审，spec §6.1 orphan 设计注）。
+
+Reviewer 流程建议（M2 e2e 任务可采纳）：global-setup 断言被测 server 实际连接 `benkyou_e2e`（如 `/health` 回显库名）——`reuseExistingServer` 静默复用连错库的旧 server 这次真实发生过。

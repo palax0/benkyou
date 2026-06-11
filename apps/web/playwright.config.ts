@@ -37,8 +37,9 @@ export default defineConfig({
     },
     {
       command: 'pnpm --filter @benkyou/web dev',
-      // Probe /health (DB-free) rather than /: Playwright starts webServer entries
-      // before globalSetup, so the e2e database may not exist yet at probe time.
+      // Probe /health rather than /: it returns 200 even when its DB check fails,
+      // and Playwright starts webServer entries before globalSetup, so the e2e
+      // database may not exist yet at probe time.
       url: 'http://localhost:3000/health',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
