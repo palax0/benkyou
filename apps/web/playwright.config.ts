@@ -24,6 +24,14 @@ export default defineConfig({
       env: { PROVIDER_MOCK_PORT: '4599' },
     },
     {
+      // Mock RSS feed so the sources e2e flow can ingest a source offline.
+      command: 'pnpm exec tsx e2e/rss-mock-server.ts',
+      url: 'http://localhost:4699/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      env: { RSS_MOCK_PORT: '4699' },
+    },
+    {
       command: 'pnpm --filter @benkyou/web dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
