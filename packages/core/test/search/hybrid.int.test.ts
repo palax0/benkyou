@@ -14,7 +14,7 @@ vi.mock('ai', () => ({
     mockState.beforeVectorSearch = undefined;
     const a = Array.from({ length: 1536 }, () => 0);
     a[0] = 1;
-    return { embedding: a };
+    return { embedding: a, usage: { tokens: 7 } };
   }),
 }));
 
@@ -85,6 +85,20 @@ describe('hybridSearch', () => {
         providerOptions: { openai: { dimensions: 1536 } },
       }),
     );
+  });
+
+  test('records query-embedding usage to the ai_usage ledger (stage=search, no item)', async () => {
+    await sql`DELETE FROM ai_usage`;
+    await hybridSearch('transformers');
+    const rows = await sql`SELECT stage, kind, model, item_id, total_tokens FROM ai_usage`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      stage: 'search',
+      kind: 'embedding',
+      model: 'emb-x',
+      item_id: null,
+      total_tokens: 7,
+    });
   });
 
   test('re-applies filters in the final detail fetch after candidate ranking', async () => {
