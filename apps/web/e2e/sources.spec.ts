@@ -48,7 +48,9 @@ test('source golden path: add → fetch → done → feed → filter → clear',
   await drainUntilDone(page);
 
   await page.goto('/admin/jobs');
-  await expect(page.getByText(/Done:\s*1/)).toBeVisible();
+  // global-setup seeds one done item, so the panel count is >= 1 here; the feed
+  // assertion below is what proves the freshly-ingested item itself reached done.
+  await expect(page.getByText(/Done:\s*[1-9]\d*/)).toBeVisible();
 
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'E2E Pipeline Item' })).toBeVisible();
