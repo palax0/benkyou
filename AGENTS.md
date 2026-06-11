@@ -4,7 +4,7 @@ Instructions for AI coding agents (Codex, Claude, Cursor, Aider, etc.) working o
 
 ## Project
 
-**Benkyou** — self-hosted personal AI news aggregator with Q&A agent. Open-source, single-user-per-deployment. Bilingual (zh/en). 5-month solo build by a frontend developer learning full-stack.
+**Benkyou** — self-hosted personal AI news aggregator with Q&A agent. Open-source, single-user-per-deployment. Bilingual (zh/en). Solo build by a frontend developer learning full-stack.
 
 **Authoritative design**: [`docs/superpowers/specs/2026-05-27-benkyou-design.md`](docs/superpowers/specs/2026-05-27-benkyou-design.md).
 **Implementation plans (per milestone)**: [`docs/superpowers/plans/`](docs/superpowers/plans/).

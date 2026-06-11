@@ -240,6 +240,7 @@ sources
   enabled       bool default true
   poll_interval int default 1800        -- 秒
   last_polled_at timestamptz
+  last_fetch_error text                  -- NULL = 最近一次抓取成功；失败时记录信息供 /sources 展示
   created_at    timestamptz default now()
 
 items
@@ -272,6 +273,7 @@ items
   bookmarked      bool default false
   bookmarked_at   timestamptz
   ingested_at     timestamptz default now()
+  updated_at      timestamptz default now()                        -- 每次 stage 状态流转时 bump，/admin/jobs 用于"最久未动/疑似卡死"排序
   search_vec      tsvector generated always as (
                     setweight(to_tsvector('simple', coalesce(title,'')), 'A') ||
                     setweight(to_tsvector('simple', coalesce(summary,'')), 'B') ||
@@ -295,6 +297,7 @@ create unique index items_source_ext_uq on items(source_id, external_id)
 create index items_published_idx on items(published_at desc);
 create index items_source_idx on items(source_id);
 create index items_bookmarked_idx on items(bookmarked) where bookmarked = true;
+create index items_updated_at_idx on items(updated_at);
 create index items_search_vec_idx on items using gin(search_vec);
 
 item_embeddings
@@ -305,6 +308,20 @@ item_embeddings
 
 create index item_emb_hnsw on item_embeddings using hnsw (embedding vector_cosine_ops);
 create index title_emb_hnsw on item_embeddings using hnsw (title_emb vector_cosine_ops);
+
+ai_usage                                                          -- 每次 LLM/embedding 调用的 token 账本；聚合（今日/近 7 日/Top item）由此派生
+  id            bigserial primary key
+  item_id       uuid references items(id) on delete set null      -- agent/search 类调用无 item；item 删除后保留账本行
+  stage         text not null                                     -- 'embed' | 'score' | 'summary' | 'deep_summary' | (M3+ 更多)
+  kind          text not null                                     -- 'llm' | 'embedding'
+  model         text not null
+  input_tokens  int
+  output_tokens int                                               -- embedding 为 NULL
+  total_tokens  int
+  created_at    timestamptz default now()
+
+create index ai_usage_created_at_idx on ai_usage(created_at);
+create index ai_usage_item_idx on ai_usage(item_id);
 ```
 
 > **关于 embedding 维度**：`vector(N)` 在 pgvector 中是 hard-coded 类型参数，不能"动态 N"。因此 `embed_dim` 在**首次初始化迁移时**确定，写进 schema migration 模板。用户**一旦选定后不能在 UI 里改**；若要切换到不同维度的 model，需：改 `EMBED_DIM` → 重新生成迁移（让 `vector(N)` 匹配）→ drop `item_embeddings` 表 → 用新维度 recreate → 触发全量 re-embedding（自动以 batch 的方式跑）。**注：维护脚本 `scripts/migrate-embeddings.ts` 尚未实现，deferred 至有语料需保留时；在此之前的受支持方式是以新维度重新初始化（fresh re-install）。** 设置页面对 `embed_dim` 字段显示只读 + warning 说明（脚本就绪前不提供"运行脚本"入口）。
@@ -589,7 +606,7 @@ for await (const chunk of result.fullStream) {
 | `/items/[id]` | 单条详情（lazy 深度摘要） |
 | `/sources` | 源管理 |
 | `/settings` | LLM / 兴趣 / 权重 / 密码 / 语言 |
-| `/admin/jobs` | 失败任务列表 + retry（自用） |
+| `/admin/jobs` | 六段式 pipeline 面板（自用）：状态分布 / 队列健康 + 孤儿任务 / 处理中（>30min 标记疑似卡死）/ 失败明细 + retry / token 消耗（今日 · 近 7 日 · Top item）/ embedding 维度漂移；可见 tab 时 5s 自动刷新 |
 
 ### 9.2 全局布局
 
@@ -624,7 +641,7 @@ for await (const chunk of result.fullStream) {
 每个 item 卡片显示：
 
 - 内容类型图标（📄 文章 / 🎥 视频 / 💬 讨论 / 📑 论文）
-- 来源 badge + 名称
+- 来源 badge + 名称（可点击 → `/?source=<id>` 按该源筛选 feed）
 - 标题
 - 评分指示（⭐ 数 + 类别图标：📰 资讯 / 📚 知识）
 - 摘要（1-2 句）
@@ -844,22 +861,23 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 
 ---
 
-## 15. 时间预估 · Timeline
+## 15. 里程碑 · Milestones
 
-5 个月全职（约 22 周）。设计原则：
+设计原则：
 
 - **状态机的形态从 M1 开始就是最终形态**（6 个 stage 完整存在），各 stage 内部逻辑可分阶段从"stub 占位"演化为"完整实现"。这样：（a）`state='done'` 过滤语义全程稳定；（b）单元/集成测试一开始就能建立；（c）增量替换 stub 不需要改 schema。
 - **首次启动闭环（auth + LLM 配置 + 添加源 + 触发抓取）从 M1 起必须可用**，但只用"最小可用 setup 流程"。完整 onboarding 引导（默认源、标签建议、文案打磨）放 M5。
 
-| Milestone | 周 | 内容 |
-|---|---|---|
-| M0 · 骨架 | 1-2 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
-| M1 · 端到端最小闭环 | 3-6 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
-| M2 · 源拓展 | 7-9 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析）/ 临时 URL 粘贴 / transcript_status 各分支 |
-| M3 · AI 全开 | 10-13 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类、日报生成、视频类型 prompt 分支、`/admin/jobs` 失败 retry UI |
-| M4 · Agent | 14-17 | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
-| M5 · Onboarding 打磨 | 18-19 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
-| M6 · 上线 | 20-22 | E2E 测试覆盖、README 中英双语、Vercel + Supabase 兼容路径与文档、GHCR 镜像发布、首次公开发布 |
+| Milestone | 内容 |
+|---|---|
+| M0 · 骨架 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
+| M1 · 端到端最小闭环 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
+| M1c · 可观测性 & 源管理 | `ai_usage` token 账本 + 四处真实 AI 调用埋点（embed / score / summary / deep_summary）；`/admin/jobs` 六段式 pipeline 面板（状态分布 / 队列健康 + 孤儿 / 处理中 / 失败 / token 消耗 / 维度漂移）+ 失败与孤儿重试；`/sources` 增删改查 + 每源拉取状态（`last_fetch_error`）+ 立即抓取；feed 卡片来源徽章 → 每源筛选；setup/settings 表单校验失败时保留已填输入。 |
+| M2 · 源拓展 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析）/ 临时 URL 粘贴 / transcript_status 各分支 |
+| M3 · AI 全开 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类、日报生成、视频类型 prompt 分支 |
+| M4 · Agent | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
+| M5 · Onboarding 打磨 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
+| M6 · 上线 | E2E 测试覆盖、README 中英双语、Vercel + Supabase 兼容路径与文档、GHCR 镜像发布、首次公开发布 |
 
 每个 milestone 结束做一次 spec 复核，砍掉新冒出的"看着好"特性。M1 是最关键的——闭环能跑通后续都是增量。
 
