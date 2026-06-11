@@ -77,9 +77,12 @@ export async function deleteSource(id: string, opts: { cascade: boolean }): Prom
   const db = getDbClient();
   // Default keeps content: items.source_id has ON DELETE SET NULL, so orphaned
   // items fall back to adhoc_source_weight. Cascade: delete items first (their
-  // embeddings cascade via FK), then the source row.
-  if (opts.cascade) await db.delete(items).where(eq(items.sourceId, id));
-  await db.delete(sources).where(eq(sources.id, id));
+  // embeddings cascade via FK), then the source row — in one transaction so a
+  // crash can't leave the source row pointing at already-deleted items.
+  await db.transaction(async (tx) => {
+    if (opts.cascade) await tx.delete(items).where(eq(items.sourceId, id));
+    await tx.delete(sources).where(eq(sources.id, id));
+  });
 }
 
 // Relocated from setup/index.ts (re-exported there for back-compat). Enqueues a
