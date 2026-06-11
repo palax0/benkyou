@@ -8,6 +8,10 @@ const DATABASE_URL =
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // Spec files share one e2e database, so they must run serially: sources.spec
+  // flips embed_request_dimensions while embedding-dimensions.spec asserts its
+  // default. That ordering relies on alphabetical file order under workers: 1.
+  workers: 1,
   reporter: 'list',
   globalSetup: './e2e/global-setup.ts',
   use: {
@@ -33,7 +37,9 @@ export default defineConfig({
     },
     {
       command: 'pnpm --filter @benkyou/web dev',
-      url: 'http://localhost:3000',
+      // Probe /health (DB-free) rather than /: Playwright starts webServer entries
+      // before globalSetup, so the e2e database may not exist yet at probe time.
+      url: 'http://localhost:3000/health',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {

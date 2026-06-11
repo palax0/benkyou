@@ -7,13 +7,37 @@ import { hashPassword } from '@benkyou/core/auth';
 const DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou_e2e';
 
+// Creates the e2e database on a fresh postgres volume. Playwright starts the
+// webServer entries BEFORE globalSetup, so the dev server's readiness probe must
+// not depend on this having run yet (hence the DB-free /health probe in config).
+async function ensureDatabaseExists(databaseUrl: string): Promise<void> {
+  const url = new URL(databaseUrl);
+  const databaseName = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  if (!databaseName) {
+    throw new Error('E2E_DATABASE_URL must include a database name');
+  }
+  url.pathname = '/postgres';
+  const sql = postgres(url.toString(), { max: 1 });
+  try {
+    const rows = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = ${databaseName}) AS "exists"`;
+    if (!rows[0]?.exists) {
+      // CREATE DATABASE can't take a bind parameter, so quote the identifier manually.
+      await sql.unsafe(`CREATE DATABASE "${databaseName.replaceAll('"', '""')}"`);
+    }
+  } finally {
+    await sql.end();
+  }
+}
+
 export default async function globalSetup(): Promise<void> {
-  // Assumes `docker compose up -d postgres` is already running (CI does this first).
+  // Assumes the postgres container is up (`docker compose up -d postgres`).
   // Call core migration directly rather than shelling out (avoids cwd issues in monorepo).
   process.env['DATABASE_URL'] = DATABASE_URL;
   process.env['EMBED_DIM'] = process.env['EMBED_DIM'] ?? '1536';
   process.env['SESSION_SECRET'] =
     process.env['SESSION_SECRET'] ?? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  await ensureDatabaseExists(DATABASE_URL);
   await runMigrations(DATABASE_URL);
 
   const sql = postgres(DATABASE_URL);
