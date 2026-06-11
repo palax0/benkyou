@@ -22,6 +22,10 @@ const SourceSchema = z.object({
   weight: z.coerce.number().positive(),
 });
 
+// A malformed id can only come from a tampered form, never the rendered UI;
+// reject it here instead of letting Postgres throw 22P02 on the uuid cast.
+const Uuid = z.uuid();
+
 export async function addSourceAction(_p: SourceFormState, fd: FormData): Promise<SourceFormState> {
   await requireAuth();
   const values = {
@@ -39,34 +43,41 @@ export async function addSourceAction(_p: SourceFormState, fd: FormData): Promis
 
 export async function editSourceAction(_p: SourceFormState, fd: FormData): Promise<SourceFormState> {
   await requireAuth();
-  const id = String(fd.get('id') ?? '');
+  const id = Uuid.safeParse(fd.get('id'));
   const values = {
     name: String(fd.get('name') ?? ''),
     url: String(fd.get('url') ?? ''),
     weight: String(fd.get('weight') ?? '1'),
   };
+  if (!id.success) return { error: 'invalid', values };
   const parsed = SourceSchema.safeParse(values);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid', values };
-  await updateSource(id, parsed.data);
+  await updateSource(id.data, parsed.data);
   revalidatePath('/sources');
   return {};
 }
 
 export async function toggleSourceAction(fd: FormData): Promise<void> {
   await requireAuth();
-  await setSourceEnabled(String(fd.get('id')), fd.get('enabled') === 'true');
+  const id = Uuid.safeParse(fd.get('id'));
+  if (!id.success) return;
+  await setSourceEnabled(id.data, fd.get('enabled') === 'true');
   revalidatePath('/sources');
 }
 
 export async function fetchSourceNowAction(fd: FormData): Promise<void> {
   await requireAuth();
+  const id = Uuid.safeParse(fd.get('id'));
+  if (!id.success) return;
   // Paused sources allow manual fetch (spec §6.2): pause only stops auto-polling.
-  await triggerSourceFetch(String(fd.get('id')));
+  await triggerSourceFetch(id.data);
   revalidatePath('/sources');
 }
 
 export async function deleteSourceAction(fd: FormData): Promise<void> {
   await requireAuth();
-  await deleteSource(String(fd.get('id')), { cascade: fd.get('cascade') === 'on' });
+  const id = Uuid.safeParse(fd.get('id'));
+  if (!id.success) return;
+  await deleteSource(id.data, { cascade: fd.get('cascade') === 'on' });
   revalidatePath('/sources');
 }
