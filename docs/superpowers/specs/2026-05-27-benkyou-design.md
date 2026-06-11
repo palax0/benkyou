@@ -405,6 +405,13 @@ ingest → extract → embed → score → dedup → summary → (done)
 - `/admin/jobs` 列出所有 `state='failed'` 的 item，支持"从 current_stage 重试"按钮，重置 attempts 后重新入队
 - 用户可见查询统一过滤 `state = 'done'`；`failed` / 中间态对普通用户不可见
 
+**新增 stage 时的检查清单**：
+
+1. 更新 `items.state` 枚举值（本节 + §5.3 schema）
+2. Drizzle schema（如需新列）
+3. `packages/core/src/pipeline/` 中的 stage handler
+4. Worker 分发器 —— 长驻 loop 与 serverless batch handler **两处都要**
+
 ### 6.2 各 stage 详情
 
 #### ingest（仅自动源）

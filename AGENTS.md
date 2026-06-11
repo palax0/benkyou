@@ -68,15 +68,11 @@ These are load-bearing decisions. **Do not change without discussing with the us
 
 Items flow through 6 stages: `pending → extracted → embedded → scored → dedup_done → done`. On failure, **state does NOT change** during retries — only `attempts++` and `last_error` are written. Only after pg-boss exhausts `user_settings.pipeline_max_attempts` retries does the `onFail` callback set `state='failed'`. **All user-visible queries filter `state='done'`.**
 
-If you add a new pipeline stage, you must update:
-1. `items.state` enum values in the spec
-2. Drizzle schema if any new columns needed
-3. Pipeline handler in `packages/core/src/pipeline/`
-4. Worker dispatcher (long-running loop + serverless batch handler — both)
+If you add a new pipeline stage, follow the checklist in spec §6.1 (state enum, schema, handler, **both** worker dispatchers).
 
 ### Embedding dimension is frozen at install time
 
-`pgvector` requires `vector(N)` with a literal N. `EMBED_DIM` is read at `drizzle-kit generate` time and baked into the migration SQL (currently `vector(1536)` in `0000_initial.sql`) — it is **not** re-read at `migrate` time, so changing the env var alone does nothing. `user_settings.embed_dim` is `NOT NULL` and **must not be writable from the UI**. Changing dimension means: set `EMBED_DIM`, regenerate the migration so `vector(N)` matches, drop + recreate `item_embeddings`, and full re-embed. **No automated migration script exists yet** — `scripts/migrate-embeddings.ts` is deferred until there's a corpus worth preserving (spec §5.3); until then the supported path is a fresh re-install at the new dim. A high-native-dim model can be made to *fit* the frozen dim by enabling `user_settings.embed_request_dimensions`, which sends a per-request `dimensions` parameter so the model truncates to `embed_dim`. This does **not** change the frozen dimension — the requested value always equals `embed_dim`.
+`EMBED_DIM` is baked into the migration SQL at `drizzle-kit generate` time (currently `vector(1536)` in `0000_initial.sql`) — it is **not** re-read at `migrate` time, so changing the env var alone does nothing. `user_settings.embed_dim` **must not be writable from the UI**. Changing dimension is a drop-and-re-embed operation with no automated script yet — procedure and the `embed_request_dimensions` truncation option are in spec §5.3.
 
 ### Provider abstraction goes through Vercel AI SDK
 
