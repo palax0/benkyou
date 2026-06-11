@@ -13,6 +13,7 @@
     "test": "pnpm -r run test",
     "test:e2e": "pnpm --filter @benkyou/web run test:e2e",
     "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
+    "estimate:rss": "tsx --env-file-if-exists=.env scripts/estimate-rss-embedding.ts",
     "check:i18n": "tsx scripts/check-i18n.ts"
   },
   "devDependencies": {
