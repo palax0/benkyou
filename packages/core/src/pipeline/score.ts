@@ -1,8 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import { getDbClient, items } from '../db';
-import { resolveLLM, recordUsage } from '../ai';
+import { generateStructured, recordUsage } from '../ai';
 import { buildLLMConfig, getUserSettings } from '../settings';
 import { truncateChars } from '../util/text';
 
@@ -31,8 +30,13 @@ export function buildScorePrompt(input: {
     'Content excerpt:',
     input.content || '(no body text available; judge from the title)',
     '',
-    "Return topic_tags (normalized lowercase keywords), topic_score (0..1 relevance to the user's interests),",
-    "and category: 'news' for hype/announcements, 'knowledge' for tutorials/deep-dives.",
+    // The literal word "json" is required here: generateObject downgrades to
+    // response_format=json_object for openai/openai-compatible providers, which
+    // OpenAI rejects unless the prompt mentions json. See score.test.ts.
+    'Return a single JSON object with these fields:',
+    "- topic_tags: normalized lowercase keywords",
+    "- topic_score: 0..1 relevance to the user's interests",
+    "- category: 'news' for hype/announcements, 'knowledge' for tutorials/deep-dives.",
   ].join('\n');
 }
 
@@ -52,10 +56,10 @@ export async function scoreItem(itemId: string): Promise<void> {
     interestTags: settings.interestTags ?? [],
   });
 
-  const { object, usage } = await generateObject({ model: resolveLLM(cfg), schema: scoreSchema, prompt });
+  const { object, usage } = await generateStructured({ cfg, schema: scoreSchema, prompt });
   await recordUsage(
     { stage: 'score', itemId },
-    { kind: 'llm', model: cfg.model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
+    { kind: 'llm', model: cfg.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens },
   );
 
   // numeric columns are strings in Drizzle's postgres-js driver.
