@@ -338,7 +338,7 @@ create index ai_usage_created_at_idx on ai_usage(created_at);
 create index ai_usage_item_idx on ai_usage(item_id);
 ```
 
-> **记账位置**：埋点统一在 `packages/core/src/ai/` 封装层完成（LLM / embedding / whisper 客户端各自的 wrapper），调用方只传 context（stage / item_id / conversation_id）——不靠调用点人肉枚举。M1c 的"四处埋点"清单就漏掉了 search 查询 embedding（`search/hybrid.ts` 直接调 `embed()`），收口到封装层后此类遗漏结构性消失。
+> **记账位置**：埋点统一在 `packages/core/src/ai/` 封装层完成（LLM / embedding / whisper 客户端各自的 wrapper），调用方只传 context（stage / item_id / conversation_id）——不靠调用点人肉枚举。M1c 的"四处埋点"清单曾漏掉 search 查询 embedding，已在调用点补上（`stage='search'`，`item_id` 为空，计入面板的"无 item"桶）；收口到封装层后此类遗漏结构性消失——**收口时须同步删除各调用点的 `recordUsage`，避免双层重复记账**。
 > **不折算金额**：跨模型 token 不可加总为钱，BYO 多 provider 场景下维护价格表是持续负担且随时过期。面板只展示 token 量（按模型 × stage 分组）与转写音频时长，不引入任何单价配置；粘贴 modal 的"成本预估"相应降级为"预估转写时长"（§9.3）。
 > **schema 迁移时机**：`conversation_id` / `kind='transcription'` / `duration_seconds` 在 M2 一并 migration（conversations 表 M0 已建，FK 可直接引用）——M4 再改表不如现在表小的时候改。
 
@@ -534,7 +534,7 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
 | `embed_model`（同维度） | 同一 HNSW 索引混两个模型的向量，跨模型余弦无意义，**搜索静默劣化** | 不自动 re-embed；保存时强警告；/admin/jobs 增加**模型漂移检测**——`item_embeddings.model_id` 与当前设置不一致的条数（数据已有，只差一个查询；现有"维度漂移"检测不到这个） |
 | `embed_dim` | 见 §5.3 | UI 只读，不可改 |
 | `weight_α/β/γ`、`digest_count` 等查询时参数 | 无存量问题（查询时现算） | 即时生效 |
-| `pipeline_max_attempts` | pg-boss retryLimit 在队列注册时读取 | 重启 worker 后生效，UI 注明 |
+| `pipeline_max_attempts` | pg-boss retryLimit 在队列注册时读取并写回（`registerQueues` 对已存在队列调 `updateQueue`——pg-boss 的 `createQueue` 是 `ON CONFLICT DO NOTHING`，单靠它改不了存量队列） | docker 模式重启 worker 后生效；serverless 模式下一次 cron tick 生效。UI 注明 |
 
 ---
 
