@@ -9,6 +9,7 @@ export interface FeedItem {
   category: string | null;
   contentType: string;
   publishedAt: Date | null;
+  sourceId: string | null;
   sourceName: string | null;
   bookmarked: boolean;
 }
@@ -29,20 +30,34 @@ const FEED_COLUMNS = {
   contentType: items.contentType,
   publishedAt: items.publishedAt,
   bookmarked: items.bookmarked,
+  sourceId: items.sourceId,
   sourceName: sources.name,
 };
 
-export async function listFeed(opts: { limit: number; offset: number }): Promise<FeedItem[]> {
+export async function listFeed(opts: {
+  limit: number;
+  offset: number;
+  sourceId?: string;
+}): Promise<FeedItem[]> {
   const db = getDbClient();
+  const where = opts.sourceId
+    ? and(eq(items.state, 'done'), eq(items.sourceId, opts.sourceId))
+    : eq(items.state, 'done');
   const rows = await db
     .select(FEED_COLUMNS)
     .from(items)
     .leftJoin(sources, eq(sources.id, items.sourceId))
-    .where(eq(items.state, 'done'))
+    .where(where)
     .orderBy(desc(sql`coalesce(${items.publishedAt}, ${items.ingestedAt})`))
     .limit(opts.limit)
     .offset(opts.offset);
   return rows.map((r) => ({ ...r, bookmarked: r.bookmarked ?? false }));
+}
+
+export async function getSourceName(id: string): Promise<string | null> {
+  const db = getDbClient();
+  const rows = await db.select({ name: sources.name }).from(sources).where(eq(sources.id, id)).limit(1);
+  return rows[0]?.name ?? null;
 }
 
 export async function getItemForUser(id: string): Promise<ItemDetail | null> {

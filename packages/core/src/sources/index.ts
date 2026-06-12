@@ -10,3 +10,4 @@ export function getAdapter(type: string): SourceAdapter {
 }
 
 export type { RawItem, SourceAdapter } from './types';
+export * from './manage';

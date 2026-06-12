@@ -1,5 +1,4 @@
 import { getBoss } from './boss';
-import { getUserSettings } from '../settings';
 import { PER_ITEM_STAGES } from '../pipeline';
 import {
   DEAD_LETTER_QUEUE,
@@ -17,8 +16,7 @@ const DUE_SOURCE_POLL_MS = 60_000;
 // polls for due sources. Resolves only on SIGTERM/SIGINT.
 export async function runWorkerLoop(): Promise<void> {
   const boss = await getBoss();
-  const settings = await getUserSettings();
-  await registerQueues(boss, settings?.pipelineMaxAttempts ?? 3);
+  await registerQueues(boss);
 
   await boss.work<IngestJob>(INGEST_QUEUE, async ([job]) => {
     if (job) await runIngest(boss, job.data);

@@ -8,11 +8,27 @@ import { getUserSettings, setPasswordHash, updateSettings } from '@benkyou/core/
 import { testEmbedding, testLLM } from '@benkyou/core/setup';
 import { requireAuth } from '@/lib/auth';
 
+export interface FormValues {
+  locale: string;
+  llmProvider: string;
+  llmBaseUrl: string;
+  llmApiKey: string;
+  llmModel: string;
+  llmCheapModel: string;
+  embedProvider: string;
+  embedBaseUrl: string;
+  embedApiKey: string;
+  embedModel: string;
+  embedRequestDimensions: boolean;
+  interestTags: string;
+}
+
 export interface SettingsState {
   ok?: boolean;
   error?: string;
   detail?: string;
-  values?: { got: number; want: number };
+  dim?: { got: number; want: number };
+  values?: FormValues;
 }
 
 const Schema = z.object({
@@ -36,6 +52,20 @@ function str(fd: FormData, k: string): string | undefined {
 
 export async function updateSettingsAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
   await requireAuth();
+  const values: FormValues = {
+    locale: String(fd.get('locale') ?? 'zh'),
+    llmProvider: String(fd.get('llmProvider') ?? ''),
+    llmBaseUrl: String(fd.get('llmBaseUrl') ?? ''),
+    llmApiKey: String(fd.get('llmApiKey') ?? ''),
+    llmModel: String(fd.get('llmModel') ?? ''),
+    llmCheapModel: String(fd.get('llmCheapModel') ?? ''),
+    embedProvider: String(fd.get('embedProvider') ?? ''),
+    embedBaseUrl: String(fd.get('embedBaseUrl') ?? ''),
+    embedApiKey: String(fd.get('embedApiKey') ?? ''),
+    embedModel: String(fd.get('embedModel') ?? ''),
+    embedRequestDimensions: fd.get('embedRequestDimensions') === 'on',
+    interestTags: String(fd.get('interestTags') ?? ''),
+  };
   const parsed = Schema.safeParse({
     locale: fd.get('locale'),
     llmProvider: fd.get('llmProvider'),
@@ -49,11 +79,11 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     embedModel: fd.get('embedModel'),
     interestTags: str(fd, 'interestTags'),
   });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid' };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid', values };
   const v = parsed.data;
   const requestDimensions = fd.get('embedRequestDimensions') === 'on';
   const current = await getUserSettings();
-  if (!current) return { error: 'notInitialized' };
+  if (!current) return { error: 'notInitialized', values };
   const llmApiKey = v.llmApiKey ?? current.llmApiKey;
   const embedApiKey = v.embedApiKey ?? current.embedApiKey;
 
@@ -67,11 +97,11 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
   };
 
   const llmTest = await testLLM(llmCfg);
-  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error };
+  if (!llmTest.ok) return { error: 'llmFailed', detail: llmTest.error, values };
   const embTest = await testEmbedding(embedCfg);
-  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error };
+  if (!embTest.ok) return { error: 'embedFailed', detail: embTest.error, values };
   if (embTest.dim !== env.EMBED_DIM) {
-    return { error: 'dimMismatch', values: { got: embTest.dim ?? 0, want: env.EMBED_DIM } };
+    return { error: 'dimMismatch', dim: { got: embTest.dim ?? 0, want: env.EMBED_DIM }, values };
   }
 
   await updateSettings({

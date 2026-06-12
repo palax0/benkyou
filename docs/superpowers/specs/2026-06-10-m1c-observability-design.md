@@ -27,7 +27,7 @@ M1a/M1b 跑通端到端闭环后，实际使用暴露出四个 UX 问题：
 
 ## 3. 范围
 
-1. **`ai_usage` 明细账本** + 三个现有调用点埋点（§5）；
+1. **`ai_usage` 明细账本** + 四处真实调用点埋点（embed/score/summary/deep_summary，§5）；
 2. **`/admin/jobs` pipeline 面板**（自 M3 提前并扩展，§6.1）；
 3. **`/sources` 源管理页**（CRUD + 每源状态 + 立即拉取，§6.2）;
 4. **feed 源关联**（徽章可点击 + 按源筛选，§6.3）；
@@ -46,7 +46,7 @@ M1a/M1b 跑通端到端闭环后，实际使用暴露出四个 UX 问题：
 |---|---|---|
 | id | bigserial PK | |
 | item_id | uuid NULL → items，ON DELETE SET NULL | agent/搜索类调用无关联 item；item 删除后账本保留 |
-| stage | text NOT NULL | 调用发生的 pipeline stage 或功能名（现有：extract 内的摘要、embed、deep_summary；M3+ 扩展 score/dedup/digest，M4 扩展 agent）。具体取值在实现 plan 中对照代码锁定 |
+| stage | text NOT NULL | 调用发生的 pipeline stage 或功能名。**现有四处真实 AI 调用**：`embed`（embedMany）、`score`（generateObject——主题评分的 LLM 调用在 M1 即为真实调用，仅 depth_score 仍是 stub）、`summary`（generateText，独立的 summary stage，非 extract 内部）、`deep_summary`（streamText）。`extract` 仅 Readability、无 AI 调用。M3+ 扩展 dedup/digest，M4 扩展 agent |
 | kind | text NOT NULL | `'llm'` / `'embedding'` |
 | model | text NOT NULL | 实际请求的 model 名 |
 | input_tokens | integer | |
@@ -66,10 +66,10 @@ M1a/M1b 跑通端到端闭环后，实际使用暴露出四个 UX 问题：
 
 ## 5. 埋点设计
 
-`packages/core/src/ai/` 新增带上下文的执行包装（如 `runLLM(ctx, opts)` / `runEmbed(ctx, opts)`）：内部调 `generateText` / `embedMany`，完成后 **best-effort** 写 `ai_usage`——写入失败只记日志、不抛错，绝不影响 pipeline 本身。
+`packages/core/src/ai/` 新增统一的 best-effort 记录函数 `recordUsage(ctx, fields)`：各调用点在拿到 SDK 返回的 `usage` 后立即调用，完成后写 `ai_usage`——写入失败只记日志、不抛错，绝不影响 pipeline 本身。
 
-- 现有三个调用点改走包装：embed stage、extract 内的摘要、deep-summary 路由；
-- M4 的 `streamText` 在 `onFinish` 里走同一记录函数；
+- 现有四处真实调用点埋点：`embed`（embedMany）、`score`（generateObject）、`summary`（generateText）、`deep_summary`（streamText，在 `onFinish` 里记录）；
+- `extract` 仅 Readability、无 AI 调用；`testLLM`/`testEmbedding` 连通性探活不记录；
 - 与「provider 调用必须过 `core/ai`」的既有硬性约束共用同一收口点：新增调用点默认就有账本。
 
 ## 6. UI 设计
@@ -152,7 +152,7 @@ M1a/M1b 跑通端到端闭环后，实际使用暴露出四个 UX 问题：
 1. 合并 M1b → main（前置）；
 2. 文档同步（§9）；
 3. schema：`ai_usage` + `sources.last_fetch_error` + migration；
-4. core：usage 包装 + 三个调用点埋点；
+4. core：`recordUsage` + 四处调用点埋点（embed/score/summary/deep_summary）；
 5. core：`getPipelineStatus` / `retryItem` / sources CRUD / `listFeed` 过滤；
 6. web：表单容错修复（回归测试先行）；
 7. web：`/sources` → `/admin/jobs` 面板 → feed 关联；

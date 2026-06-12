@@ -17,6 +17,8 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
         <nav className="flex gap-3 text-sm">
           <Link href="/">{t('feed')}</Link>
           <Link href="/search">{t('search')}</Link>
+          <Link href="/sources">{t('sources')}</Link>
+          <Link href="/admin/jobs">{t('jobs')}</Link>
           <Link href="/settings">{t('settings')}</Link>
         </nav>
         <div className="ml-auto">

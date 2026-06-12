@@ -14,6 +14,29 @@ import { createServer, type IncomingMessage } from 'node:http';
 const PORT = Number(process.env.PROVIDER_MOCK_PORT ?? 4599);
 const NATIVE_DIM = 3072;
 
+interface EmbeddingRequestBody {
+  input?: unknown;
+  dimensions?: unknown;
+  model?: unknown;
+}
+
+function buildEmbeddingResponse(body: EmbeddingRequestBody) {
+  const dim = typeof body.dimensions === 'number' ? body.dimensions : NATIVE_DIM;
+  // One embedding per input element — the embed pipeline stage sends two values
+  // (docText + title) via embedMany and throws if the counts don't match.
+  const count = Array.isArray(body.input) ? body.input.length : 1;
+  return {
+    object: 'list',
+    data: Array.from({ length: count }, (_, index) => ({
+      object: 'embedding',
+      index,
+      embedding: Array.from({ length: dim }, () => 0.01),
+    })),
+    model: typeof body.model === 'string' ? body.model : 'mock-embed',
+    usage: { prompt_tokens: count, total_tokens: count },
+  };
+}
+
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -44,23 +67,19 @@ const server = createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
 
     if (path.endsWith('/embeddings')) {
-      const requested = body.dimensions;
-      const dim = typeof requested === 'number' ? requested : NATIVE_DIM;
-      // Surfaced in the Playwright webServer log to debug the dimensions wiring.
-      console.error('[provider-mock] /embeddings dimensions=', requested, '→ returning dim=', dim);
       res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          object: 'list',
-          data: [{ object: 'embedding', index: 0, embedding: Array.from({ length: dim }, () => 0.01) }],
-          model: typeof body.model === 'string' ? body.model : 'mock-embed',
-          usage: { prompt_tokens: 1, total_tokens: 1 },
-        }),
-      );
+      res.end(JSON.stringify(buildEmbeddingResponse(body)));
       return;
     }
 
     if (path.endsWith('/chat/completions')) {
+      // A structured request (`response_format` present, used by generateObject in
+      // the score stage) must return JSON content matching scoreSchema; a plain
+      // request returns free text.
+      const structured = body.response_format != null;
+      const content = structured
+        ? JSON.stringify({ topic_tags: ['e2e'], topic_score: 0.5, category: 'news' })
+        : 'ok';
       res.writeHead(200);
       res.end(
         JSON.stringify({
@@ -68,7 +87,7 @@ const server = createServer((req, res) => {
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
           model: typeof body.model === 'string' ? body.model : 'mock-llm',
-          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+          choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
           usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
         }),
       );

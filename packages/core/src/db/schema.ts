@@ -2,6 +2,7 @@ import {
   pgTable,
   text,
   integer,
+  bigserial,
   uuid,
   timestamp,
   boolean,
@@ -91,6 +92,7 @@ export const sources = pgTable('sources', {
   enabled: boolean('enabled').default(true),
   pollInterval: integer('poll_interval').default(1800),
   lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
+  lastFetchError: text('last_fetch_error'), // NULL = last fetch succeeded
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -144,6 +146,7 @@ export const items = pgTable(
     bookmarked: boolean('bookmarked').default(false),
     bookmarkedAt: timestamp('bookmarked_at', { withTimezone: true }),
     ingestedAt: timestamp('ingested_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     searchVec: tsvectorCol('search_vec').generatedAlwaysAs(
       sql`setweight(to_tsvector('simple', coalesce(title,'')),'A') || setweight(to_tsvector('simple', coalesce(summary,'')),'B') || setweight(to_tsvector('simple', coalesce(raw_content,'')),'C')`,
     ),
@@ -159,6 +162,7 @@ export const items = pgTable(
     bookmarkedIdx: index('items_bookmarked_idx')
       .on(t.bookmarked)
       .where(sql`bookmarked = true`),
+    updatedAtIdx: index('items_updated_at_idx').on(t.updatedAt),
     searchVecIdx: index('items_search_vec_idx').using('gin', t.searchVec),
   }),
 );
@@ -172,6 +176,27 @@ export const itemEmbeddings = pgTable('item_embeddings', {
   titleEmb: vector(env.EMBED_DIM)('title_emb'),
   modelId: text('model_id'),
 });
+
+/* ─── ai_usage ─── (per-call token ledger; aggregates derive from this) */
+export const aiUsage = pgTable(
+  'ai_usage',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    // agent/search calls have no item; keep the ledger row after the item is deleted.
+    itemId: uuid('item_id').references(() => items.id, { onDelete: 'set null' }),
+    stage: text('stage').notNull(), // 'embed' | 'score' | 'summary' | 'deep_summary' | (M3+ more)
+    kind: text('kind').notNull(), // 'llm' | 'embedding'
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'), // NULL for embeddings
+    totalTokens: integer('total_tokens'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    createdAtIdx: index('ai_usage_created_at_idx').on(t.createdAt),
+    itemIdx: index('ai_usage_item_idx').on(t.itemId),
+  }),
+);
 
 /* ─── digests ─── */
 export const digests = pgTable('digests', {

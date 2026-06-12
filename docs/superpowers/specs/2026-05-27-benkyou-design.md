@@ -1,8 +1,8 @@
 # Benkyou · 个人 AI 资讯聚合与学习平台 — 设计文档
 
-**Version**: 0.1 (Draft)
-**Date**: 2026-05-27
-**Status**: 待评审
+**Version**: 0.2
+**Date**: 2026-06-12（0.1 初稿: 2026-05-27）
+**Status**: 已修订 —— M1c 完成后的全面评审产物，重点闭合 M2（视频/转写路径）的设计洞
 
 ---
 
@@ -115,7 +115,8 @@ benkyou/
 ├── packages/
 │   └── core/                   # 共享业务逻辑库
 │       ├── db/                 # Drizzle ORM schema + 迁移
-│       ├── sources/            # 源适配器（rss / hn / reddit / youtube / bilibili / adhoc）
+│       ├── sources/            # 源适配器；接口含 listNew()（ingest 用）与 extract(item)（extract stage 用），
+│       │                       #   平台特定逻辑（字幕 API / Readability）全部住这里，不进 pipeline/
 │       ├── ai/                 # LLM/embedding 走 Vercel AI SDK; Whisper 自封装 OpenAI-API 兼容客户端
 │       ├── pipeline/           # 6 个 stage 的处理函数
 │       ├── search/             # 混合检索 + RRF + 重排
@@ -187,6 +188,7 @@ user_settings
   id                int primary key default 1
   password_hash     text not null               -- argon2id
   locale            text not null default 'zh'  -- zh | en
+  timezone          text not null default 'Asia/Shanghai' -- IANA 名；digest 的"今天"日界、触发时刻、回溯窗口三处统一用它（容器默认 UTC，没有它日报窗口对中文用户错位 8h）；M3 落地
   -- LLM (via Vercel AI SDK)
   llm_provider      text                         -- 'anthropic'|'openai'|'openai-compatible'|'google'|'mistral'|'ollama'|...
   llm_base_url      text                         -- 仅 provider ∈ {openai-compatible, ollama, ...} 时填
@@ -240,7 +242,14 @@ sources
   enabled       bool default true
   poll_interval int default 1800        -- 秒
   last_polled_at timestamptz
+  last_fetch_error text                  -- NULL = 最近一次抓取成功；失败时记录信息供 /sources 展示
+  consecutive_failures int not null default 0 -- 连续失败计数；last_fetch_error 只反映最近一次，flapping 源（10 次失败 9 次、最后一次恰好成功）靠它暴露"近期不稳定"badge；M2 落地
   created_at    timestamptz default now()
+
+-- 删除源的语义（/sources UI 提供两种，用户选）：
+--   保留内容：items.source_id ON DELETE SET NULL → 该源 items 落到 adhoc_source_weight 兜底
+--             （排序权重会悄悄变，删除确认框必须提示这一点）
+--   级联删除：先删该源全部 items（embeddings 随 FK cascade），再删源行
 
 items
   id              uuid primary key default gen_random_uuid()
@@ -253,7 +262,7 @@ items
   published_at    timestamptz
   content_type    text not null                                    -- 'article' | 'video' | 'discussion' | 'paper'
   raw_content     text                                             -- 正文 / 字幕 / 转写
-  transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'unavailable'
+  transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'skipped_serverless' | 'unavailable'
   transcript_segments jsonb                                        -- 视频说话人分段（如果可用）
   video_duration  int                                              -- 秒，仅视频
   video_kind      text                                             -- 'auto' | 'interview' | 'tutorial' | 'talk' | 'other'
@@ -272,11 +281,16 @@ items
   bookmarked      bool default false
   bookmarked_at   timestamptz
   ingested_at     timestamptz default now()
+  updated_at      timestamptz default now()                        -- 每次 stage 状态流转时 bump，/admin/jobs 用于"最久未动/疑似卡死"排序
   search_vec      tsvector generated always as (
                     setweight(to_tsvector('simple', coalesce(title,'')), 'A') ||
                     setweight(to_tsvector('simple', coalesce(summary,'')), 'B') ||
-                    setweight(to_tsvector('simple', coalesce(raw_content,'')), 'C')
+                    setweight(to_tsvector('simple', left(coalesce(raw_content,''), 100000)), 'C')
                   ) stored
+  -- raw_content 必须截断：tsvector 单值上限 ~1MB，数小时播客的转写不截断会让该行
+  -- INSERT/UPDATE 直接报错 → extract 对该 item 永久失败（确定性故障，不是边缘 case）。
+  -- 100k 字符对 C 权重（本来就最低）的召回影响可忽略。
+  -- ⚠️ 当前 0000_initial.sql 未截断 —— M2 转写落地前需一次 migration 修正。
 
   unique (url_hash)                                                 -- 全局唯一，覆盖手动粘贴与无 GUID feed
   unique (source_id, external_id)                                   -- 当二者均 NOT NULL 时的快速去重（部分索引在下方）
@@ -295,6 +309,7 @@ create unique index items_source_ext_uq on items(source_id, external_id)
 create index items_published_idx on items(published_at desc);
 create index items_source_idx on items(source_id);
 create index items_bookmarked_idx on items(bookmarked) where bookmarked = true;
+create index items_updated_at_idx on items(updated_at);
 create index items_search_vec_idx on items using gin(search_vec);
 
 item_embeddings
@@ -305,7 +320,27 @@ item_embeddings
 
 create index item_emb_hnsw on item_embeddings using hnsw (embedding vector_cosine_ops);
 create index title_emb_hnsw on item_embeddings using hnsw (title_emb vector_cosine_ops);
+
+ai_usage                                                          -- 每次 AI 调用的用量账本；聚合（今日/近 7 日/Top item）由此派生
+  id            bigserial primary key
+  item_id       uuid references items(id) on delete set null      -- agent/search 类调用无 item；item 删除后保留账本行
+  conversation_id uuid references conversations(id) on delete set null -- M4 agent 成本归因（agent 会话是上线后成本占比最高的部分，没有它面板只剩一个不可下钻的 NULL 桶）；pipeline 调用为 NULL
+  stage         text not null                                     -- 'embed' | 'score' | 'summary' | 'deep_summary' | 'search' | 'transcribe' | 'agent' | ...
+  kind          text not null                                     -- 'llm' | 'embedding' | 'transcription'
+  model         text not null
+  input_tokens  int
+  output_tokens int                                               -- embedding / transcription 为 NULL
+  total_tokens  int
+  duration_seconds int                                            -- 仅 transcription：音频时长（Whisper 按分钟计价，token 概念不适用）
+  created_at    timestamptz default now()
+
+create index ai_usage_created_at_idx on ai_usage(created_at);
+create index ai_usage_item_idx on ai_usage(item_id);
 ```
+
+> **记账位置**：埋点统一在 `packages/core/src/ai/` 封装层完成（LLM / embedding / whisper 客户端各自的 wrapper），调用方只传 context（stage / item_id / conversation_id）——不靠调用点人肉枚举。M1c 的"四处埋点"清单曾漏掉 search 查询 embedding，已在调用点补上（`stage='search'`，`item_id` 为空，计入面板的"无 item"桶）；收口到封装层后此类遗漏结构性消失——**收口时须同步删除各调用点的 `recordUsage`，避免双层重复记账**。
+> **不折算金额**：跨模型 token 不可加总为钱，BYO 多 provider 场景下维护价格表是持续负担且随时过期。面板只展示 token 量（按模型 × stage 分组）与转写音频时长，不引入任何单价配置；粘贴 modal 的"成本预估"相应降级为"预估转写时长"（§9.3）。
+> **schema 迁移时机**：`conversation_id` / `kind='transcription'` / `duration_seconds` 在 M2 一并 migration（conversations 表 M0 已建，FK 可直接引用）——M4 再改表不如现在表小的时候改。
 
 > **关于 embedding 维度**：`vector(N)` 在 pgvector 中是 hard-coded 类型参数，不能"动态 N"。因此 `embed_dim` 在**首次初始化迁移时**确定，写进 schema migration 模板。用户**一旦选定后不能在 UI 里改**；若要切换到不同维度的 model，需：改 `EMBED_DIM` → 重新生成迁移（让 `vector(N)` 匹配）→ drop `item_embeddings` 表 → 用新维度 recreate → 触发全量 re-embedding（自动以 batch 的方式跑）。**注：维护脚本 `scripts/migrate-embeddings.ts` 尚未实现，deferred 至有语料需保留时；在此之前的受支持方式是以新维度重新初始化（fresh re-install）。** 设置页面对 `embed_dim` 字段显示只读 + warning 说明（脚本就绪前不提供"运行脚本"入口）。
 > **维度请求（截断）**：若所选模型原生维度高于 `embed_dim`，可在设置中开启 `embed_request_dimensions`，运行时向 provider 传入 dimensions 参数（openai: `dimensions`，google: `outputDimensionality`，openai-compatible/ollama: `openaiCompatible.dimensions`），让模型直接返回 `embed_dim` 维向量——**请求维度恒等于 `embed_dim`**，不改变冻结的列类型，也不需要 halfvec。注意：Google 在 `outputDimensionality < 原生维度` 时不会自动归一化；当前搜索用余弦距离 `<=>`（尺度无关）不受影响，若将来改用 `<#>`/`<->` 需在写入前做 L2 归一化。开启开关不会自动 re-embed 存量语料。
@@ -360,7 +395,7 @@ create index msg_conv_idx on messages(conversation_id, created_at);
 
 ### 5.6 任务队列
 
-由 `pg-boss` 库在 PG 中自动建表（schema 名 `pgboss`），应用代码通过其 API 提交/消费任务，不直接 SQL 操作。
+由 `pg-boss` 库在 PG 中自动建表（schema 名 `pgboss`）。**写操作**（提交 / 消费 / 重试）只走 pg-boss API；**只读观测查询**允许直接 SELECT `pgboss.job`——/admin/jobs 的队列健康统计与孤儿检测没有等价 API，M1c 已如此实现（`pipeline/status.ts`）。代价是与 pg-boss 内部表结构耦合：升级 pg-boss 大版本时必须回归 /admin/jobs 面板。
 
 ---
 
@@ -376,7 +411,7 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 **触发方式**：
 
-- 定时拉取：每个 source 按 `poll_interval` 周期，pg-boss schedule 触发 `ingest:<source_id>` 任务
+- 定时拉取：worker 每 60s 检查一次"到期源"（`last_polled_at + poll_interval < now()`），为每个到期源入队一条 `ingest` 任务；serverless 模式由 `/api/cron/work` 每次触发时执行同一检查。**不用 pg-boss schedule-per-source**：那要求 sources 增删改都同步维护 schedule 生命周期（删源残留 schedule 是经典 bug 源），轮询方案使源的变更即时生效、无需同步。（M1 实际实现即此方案，spec 据实更新）
 - 用户粘贴 URL：API 接收 → 创建 item（state=pending）→ 直接入队 `extract` 任务（跳过 ingest）
 
 **失败处理（关键：重试期间状态不变）**：
@@ -387,6 +422,17 @@ ingest → extract → embed → score → dedup → summary → (done)
 - 任务成功 → state 推进到下一档（如 `extracted`），`attempts = 0`，`current_stage` 设为下一 stage
 - `/admin/jobs` 列出所有 `state='failed'` 的 item，支持"从 current_stage 重试"按钮，重置 attempts 后重新入队
 - 用户可见查询统一过滤 `state = 'done'`；`failed` / 中间态对普通用户不可见
+
+**孤儿（orphan）语义——一个显式取舍**：stage 成功后"写 state"与"入队下一 stage"是两次操作、**不在同一事务**（pg-boss 支持事务内 send，但与 Drizzle 共享连接/事务的接线成本不低）。两步之间进程崩溃 → item 停在中间态且无任何 job 指向它。设计决策是**允许孤儿 + 面板修复**而非事务保证：/admin/jobs 检测"state 非 done/failed 且 `pgboss.job` 中无 created/retry/active job 指向它"的 item，提供一键重新入队；恢复 SLA 是"用户打开面板时"，单用户场景可接受。不要在不讨论的情况下把它"修复"成事务方案。
+
+**at-least-once 与状态守卫**：pg-boss 是 at-least-once 投递，重复/乱序 job 必然出现。runner 在执行前校验 item 的 state 是否等于该 stage 的前置态，不匹配则**静默 ack 丢弃**（重跑会双写副作用，如 dedup 建出第二个 cluster；抛错则会被重试到死信）。推论：**任何"让已推进的 item 回流重跑某 stage"的需求都不能靠直接入队实现**——守卫会吞掉它；必须走显式重置 state 的入口（如面板的重试按钮）。
+
+**新增 stage 时的检查清单**：
+
+1. 更新 `items.state` 枚举值（本节 + §5.3 schema）
+2. Drizzle schema（如需新列）
+3. `packages/core/src/pipeline/` 中的 stage handler
+4. Worker 分发器 —— 长驻 loop 与 serverless batch handler **两处都要**
 
 ### 6.2 各 stage 详情
 
@@ -400,24 +446,29 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 #### extract
 
+extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的 `extract(item)`，平台特定逻辑（字幕 API、Readability、HTML 抓取）全部住在 `packages/core/src/sources/<type>.ts`——否则每加一种源都要改 pipeline，M2 的三种新源会把 extract 变成上帝函数。
+
 - **RSS**：feed 里有 `content:encoded` 全文用之；只有 description 的，fetch HTML + Mozilla Readability 提取正文
 - **HN/Reddit**（v2）：调官方 JSON API 拿 story + 前 N 个评论
 - **YouTube**：先调字幕 API；有字幕直接存入 `raw_content`，并尝试解析说话人（若 API 提供）
 - **Bilibili**：调 Bilibili 字幕 API（公开）
-- **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。再判断转写策略：
+- **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。转写决策（给定 duration + 来源类型 + 部署模式 → skip / confirm / transcribe）是 **core 的一个纯函数**（`pipeline/transcribe-policy.ts`），worker 的自动源路径与 web 的手动粘贴路径调同一份——这个策略天然横跨两层，不抽出来就会在 `apps/web` 和 `pipeline/extract` 各长一份：
+  - `DEPLOY_MODE=serverless` → `transcript_status='skipped_serverless'`，**继续后续 pipeline**（serverless 不支持转写，见 §11.2）
   - 自动源 + `duration > video_auto_limit` → `transcript_status='skipped_too_long'`，`raw_content=null`，**继续后续 pipeline**（embed/score 只用 title + metadata；UI 显示"未转写"badge，用户可手动批准）
   - 手动粘贴 + `duration > video_manual_limit` → 拒绝粘贴，前端报错"超过上限，请缩短或在设置里上调上限"
-  - 手动粘贴 + `duration > video_auto_limit` 但 `< video_manual_limit` → 前端展示预估成本，用户勾选"确认转写成本"后才入队 `transcribe`
+  - 手动粘贴 + `duration > video_auto_limit` 但 `< video_manual_limit` → 前端展示预估转写时长（音频分钟数；不折算金额，见 §5.3 ai_usage 注），用户勾选"确认转写"后才入队 `transcribe`
   - 其他情况 → 入队 `transcribe:item_id` 子任务（`transcript_status='pending'`）
 - **临时粘贴 URL**：识别是否为视频域名，分别走视频/文章路径
 
 `transcribe` 子任务：
 - 用 ffmpeg 提音频（短视频可跳过，直接送音频 URL）
 - 长视频切 10min chunk，5s overlap
-- `Promise.all` 并发调 Whisper endpoint
+- 并发调 Whisper endpoint，**并发上限 3**（p-limit；无上限的 `Promise.all` 在 3h 视频 ≈ 18 chunk 时会撞 endpoint rate limit）
 - 合并 transcripts，处理 chunk 边界（用 overlap 内的相似度对齐）
 - 若 endpoint 返回 speaker labels（如 Deepgram），存入 `transcript_segments` jsonb；否则 `raw_content` 存纯文本
 - 完成 → `transcript_status='present'`；失败超 max attempts → `transcript_status='unavailable'`（继续 embed/score 用 title）
+
+**转写与状态机的归属（关键决策，M2 前定死）**：走转写路径的 item，在 transcribe 得出终态（`present` / `unavailable`）之前 **state 停留在 `pending`** —— "extract 成功"的定义**包含转写完成**，由 transcribe 子任务在到达终态时推进 `state='extracted'` 并入队 embed。理由：embed/score/summary 都消费 `raw_content`；若 extract 先行推进，转写到货后内容已无重跑路径——runner 的 at-least-once 状态守卫（§6.1）会丢弃任何回流 job，这个守卫不能为转写开洞。被否决的备选：(a) 显式回流 re-embed——状态守卫要加例外规则，复杂度上升且引入"done 之后内容变化"的不一致窗口；(b) 转写不参与 AI 链——视频内容不可搜索、不参与评分，产品价值打折。代价与配套：extract 对长视频是分钟级 stage，`transcribe` 队列的 pg-boss 超时（`expireInSeconds`）须按 `video_manual_limit` 推算放宽；其重试计数独立于 extract（`transcript_status` 的 pending→unavailable 由 transcribe 自己的 max attempts 驱动，items.attempts 不混用）。
 
 #### embed
 
@@ -443,6 +494,7 @@ ingest → extract → embed → score → dedup → summary → (done)
 - 未命中 → 新建 cluster
 - 更新 `event_clusters.item_count` 与 `last_updated_at`
 - 当 canonical_item 被删除（`ON DELETE SET NULL`）时，下一次 dedup 任务进入这个 cluster 触发时会自动 re-elect canonical
+- **并发约束（M3 实装时为 Hard Invariant）**：dedup 队列 worker 并发固定为 1。"查相似 → 未命中新建"是 check-then-insert：两条同事件 item 并发处理会各建一个 cluster 且不会自愈（之后各自只跟自己的 cluster 比）。单用户吞吐不需要并行 dedup，串行是最便宜的正确性保证；不用 advisory lock 是因为它防得住竞态但换来锁等待与调试成本，收益为零
 
 #### summary
 
@@ -469,6 +521,20 @@ ingest → extract → embed → score → dedup → summary → (done)
 5. 写入 `digests` + `digest_items`
 
 > 注：search 与 digest 用同一组 α/β/γ 权重；不同的是 α 在 search 时乘 `rrf_score`、在 digest 时乘 `topic_score`（因为 digest 没有用户 query）。如果未来希望两边独立调权重，再加 `digest_weight_*` 三列即可，schema 改动最小。手动粘贴内容（`source_id IS NULL`）的权重统一用 `user_settings.adhoc_source_weight` 兜底。
+> **实现约束（单一实现）**：`final_score` 公式与 `effective_weight` 的 COALESCE 兜底在 `packages/core` 只实现一次，search 重排 / digest（M3）/ feed 智能排序（M3）三个调用方共用。当前 search 在 `search/hybrid.ts` 内联实现——M3 第二个调用方出现时必须先抽出，三份手写公式必然漂移。
+
+### 6.4 设置变更的传播语义
+
+统一原则：**改设置不回填存量数据**——已处理 item 的 embedding / score / summary 是生成时的快照；UI 在保存有存量影响的设置时明确警告影响范围。逐项：
+
+| 设置变更 | 存量影响 | 处理 |
+|---|---|---|
+| `interest_tags` | 已有 `topic_score` 基于旧标签，digest / 智能排序静默用旧分 | 不回填；保存时提示"仅对新内容生效"。批量 re-score 工具列入 §16 待决 |
+| `locale` | 已有 summary / deep_summary 语言不变 | 不回填；提示同上 |
+| `embed_model`（同维度） | 同一 HNSW 索引混两个模型的向量，跨模型余弦无意义，**搜索静默劣化** | 不自动 re-embed；保存时强警告；/admin/jobs 增加**模型漂移检测**——`item_embeddings.model_id` 与当前设置不一致的条数（数据已有，只差一个查询；现有"维度漂移"检测不到这个） |
+| `embed_dim` | 见 §5.3 | UI 只读，不可改 |
+| `weight_α/β/γ`、`digest_count` 等查询时参数 | 无存量问题（查询时现算） | 即时生效 |
+| `pipeline_max_attempts` | pg-boss retryLimit 在队列注册时读取并写回（`registerQueues` 对已存在队列调 `updateQueue`——pg-boss 的 `createQueue` 是 `ON CONFLICT DO NOTHING`，单靠它改不了存量队列） | docker 模式重启 worker 后生效；serverless 模式下一次 cron tick 生效。UI 注明 |
 
 ---
 
@@ -488,7 +554,8 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 `α / β / γ` 取自 `user_settings`，前端有"权重调试"工具供高级用户调整。
 
-> **关于"全文检索"术语**：本设计使用 PostgreSQL 内建 `ts_rank`（基于词频 + 位置权重，**不是严格的 BM25**）。对绝大多数中英混合 AI 资讯场景已经够用。未来若需要严格 BM25，可换用 `pg_search` 扩展（社区维护）或将 lexical 路径外包到 Tantivy / Meilisearch；接口保持一致即可。
+> **关于"全文检索"术语**：本设计使用 PostgreSQL 内建 `ts_rank`（基于词频 + 位置权重，**不是严格的 BM25**）。未来若需要严格 BM25，可换用 `pg_search` 扩展（社区维护）或将 lexical 路径外包到 Tantivy / Meilisearch；接口保持一致即可。
+> **中文检索的显式降级（已知限制，已决策）**：`'simple'` 分词不切分连续中文——文档侧整段中文只产出少数巨型 token，`plainto_tsquery('simple', 中文查询)` 同样不分词，因此 **lexical 路径对中文查询召回 ≈ 0，hybrid 在中文场景实际退化为纯向量检索**（RRF 本身安全：lexical 返回空集只是不贡献分数）。当前接受的取舍：中文召回以向量为主，lexical 仅覆盖英文与精确 token（产品名 / 人名 / 缩写）。升级路径记录在 §16——应用层 2-gram 预处理（不加 PG 扩展、Supabase 兼容）；**不选** zhparser / pg_jieba：要自定义 PG 镜像（self-host 门槛上升），且 Supabase 不支持，serverless 部署路径直接断掉。
 
 ### 7.2 性能保障
 
@@ -589,7 +656,7 @@ for await (const chunk of result.fullStream) {
 | `/items/[id]` | 单条详情（lazy 深度摘要） |
 | `/sources` | 源管理 |
 | `/settings` | LLM / 兴趣 / 权重 / 密码 / 语言 |
-| `/admin/jobs` | 失败任务列表 + retry（自用） |
+| `/admin/jobs` | 六段式 pipeline 面板（自用）：状态分布 / 队列健康 + 孤儿任务 / 处理中（>30min 标记疑似卡死）/ 失败明细 + retry / token 消耗（今日 · 近 7 日 · Top item）/ embedding 维度漂移（M3 起加模型漂移，见 §6.4）；可见 tab 时 5s 自动刷新 |
 
 ### 9.2 全局布局
 
@@ -612,10 +679,12 @@ for await (const chunk of result.fullStream) {
 - **`Cmd+K`**：全局搜索快捷键
 - **粘贴 URL modal**：
   - URL 输入框
+  - **重复粘贴**（`url_hash` 已存在）→ 不报错，直接跳转已有 `/items/[id]`（高频场景：粘的文章订阅源其实已收过）
   - 自动识别为视频时，显示视频类型下拉（auto / interview / tutorial / talk / other）
-  - 显示预估成本（按时长 + 转写单价）
-  - 长视频（> 30min）需勾选"确认转写成本"才能提交
-  - 提交后显示处理进度：`queued → extracting → transcribing (45%) → scoring → done`
+  - 显示预估转写时长（音频分钟数；不折算金额，见 §5.3 ai_usage 注）
+  - 长视频（> 30min）需勾选"确认转写"才能提交
+  - 提交后显示 **stage 级**处理进度：`queued → extracting → transcribing → scoring → done`——前端轮询 `GET /api/items/[id]/status`（返回 `state` + `transcript_status` + `last_error`），**不做 chunk 级百分比**（需要 chunk 进度上报通道，复杂度不抵收益）
+- **pipeline 故障 banner**（M2）：feed 顶部全局横幅——存在 `state='failed'` 或"中间态 >30min 未动"的 item 时显示"N 条内容处理失败 / M 条疑似卡住 → 查看详情（/admin/jobs）"。否则 BYO endpoint 配错 / 欠费时 feed 只是静默断流，用户无从知晓（§14.1 承诺的"运行时失败有明确错误提示"落在这里；数据源复用面板已有查询）
 - **深色模式**：`prefers-color-scheme` 自动 + 设置页手动覆盖
 - **i18n**：URL 不带 locale 前缀；Cookie 记录；header 右上角切换器
 
@@ -624,7 +693,7 @@ for await (const chunk of result.fullStream) {
 每个 item 卡片显示：
 
 - 内容类型图标（📄 文章 / 🎥 视频 / 💬 讨论 / 📑 论文）
-- 来源 badge + 名称
+- 来源 badge + 名称（可点击 → `/?source=<id>` 按该源筛选 feed）
 - 标题
 - 评分指示（⭐ 数 + 类别图标：📰 资讯 / 📚 知识）
 - 摘要（1-2 句）
@@ -705,6 +774,8 @@ services:
 - worker 不启动；提供 `/api/cron/work` endpoint
 - 外部 cron（cron-job.org / GitHub Actions / Upstash QStash）每 5 分钟 ping `/api/cron/work?max=20`
 - Endpoint 内调 `pgboss.fetch(...)` 拉 20 条任务，逐个处理，10s 内返回
+
+**serverless 模式的能力边界（显式声明）**：无字幕视频**不转写**——chunked Whisper 是分钟级操作，放不进 10s 预算；半途超时被杀 → pg-boss 重试 → 重复转写重复花钱。该模式下转写决策函数（§6.2）直接判 `transcript_status='skipped_serverless'`，item 继续 pipeline（embed/score 用 title + metadata），详情页提示"转写需 Docker 部署"。chunk 级断点续传（让 serverless 也能转写）是远期可选项，不在 v1 范围。
 
 代码差异极小：worker 进程的"轮询循环"和 serverless endpoint 的"单次批处理"复用相同的 `processOne(job)` 函数。
 
@@ -825,7 +896,7 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 视频转写成本失控 | 高 | 自动 30min 上限；手动需用户确认显示预估成本 |
+| 视频转写成本失控 | 高 | 自动 30min 上限；手动超限需确认（显示预估转写时长）；serverless 模式不转写；Whisper 并发上限 3 |
 | pgvector 50w+ 性能 | 中 | HNSW 索引；MVP 不太可能撞到 |
 | RSS 格式多样性 | 中 | 用成熟库；try/catch 隔离单源故障 |
 | HN/Reddit rate limit | 中 | worker 限速 + 退避（v2 才用到） |
@@ -844,22 +915,23 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 
 ---
 
-## 15. 时间预估 · Timeline
+## 15. 里程碑 · Milestones
 
-5 个月全职（约 22 周）。设计原则：
+设计原则：
 
 - **状态机的形态从 M1 开始就是最终形态**（6 个 stage 完整存在），各 stage 内部逻辑可分阶段从"stub 占位"演化为"完整实现"。这样：（a）`state='done'` 过滤语义全程稳定；（b）单元/集成测试一开始就能建立；（c）增量替换 stub 不需要改 schema。
 - **首次启动闭环（auth + LLM 配置 + 添加源 + 触发抓取）从 M1 起必须可用**，但只用"最小可用 setup 流程"。完整 onboarding 引导（默认源、标签建议、文案打磨）放 M5。
 
-| Milestone | 周 | 内容 |
-|---|---|---|
-| M0 · 骨架 | 1-2 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
-| M1 · 端到端最小闭环 | 3-6 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
-| M2 · 源拓展 | 7-9 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析）/ 临时 URL 粘贴 / transcript_status 各分支 |
-| M3 · AI 全开 | 10-13 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类、日报生成、视频类型 prompt 分支、`/admin/jobs` 失败 retry UI |
-| M4 · Agent | 14-17 | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
-| M5 · Onboarding 打磨 | 18-19 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
-| M6 · 上线 | 20-22 | E2E 测试覆盖、README 中英双语、Vercel + Supabase 兼容路径与文档、GHCR 镜像发布、首次公开发布 |
+| Milestone | 内容 |
+|---|---|
+| M0 · 骨架 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
+| M1 · 端到端最小闭环 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
+| M1c · 可观测性 & 源管理 | `ai_usage` token 账本 + 四处真实 AI 调用埋点（embed / score / summary / deep_summary）；`/admin/jobs` 六段式 pipeline 面板（状态分布 / 队列健康 + 孤儿 / 处理中 / 失败 / token 消耗 / 维度漂移）+ 失败与孤儿重试；`/sources` 增删改查 + 每源拉取状态（`last_fetch_error`）+ 立即抓取；feed 卡片来源徽章 → 每源筛选；setup/settings 表单校验失败时保留已填输入。 |
+| M2 · 源拓展 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析；状态机归属见 §6.2，serverless 边界见 §11.2）/ 临时 URL 粘贴（重复 URL 跳转、stage 级进度）/ transcript_status 各分支 / pipeline 故障 banner。**前置 migration**：search_vec 截断（§5.3）、ai_usage 扩展（conversation_id / kind / duration_seconds）、sources.consecutive_failures |
+| M3 · AI 全开 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类（队列并发=1，§6.2）、日报生成（user_settings.timezone 定日界）、视频类型 prompt 分支、final_score 抽单一实现（§6.3）、模型漂移检测（§6.4） |
+| M4 · Agent | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
+| M5 · Onboarding 打磨 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
+| M6 · 上线 | E2E 测试覆盖、README 中英双语、Vercel + Supabase 兼容路径与文档、GHCR 镜像发布、首次公开发布 |
 
 每个 milestone 结束做一次 spec 复核，砍掉新冒出的"看着好"特性。M1 是最关键的——闭环能跑通后续都是增量。
 
@@ -871,7 +943,10 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 
 - 默认源列表（M5 期确定）
 - 兴趣标签初始候选（如 "LLM"、"Agent"、"推理" 等）的预设清单
-- 日报触发时间（默认 08:00 本地，或让用户配置）
+- 日报触发时间（默认 08:00，时区取 `user_settings.timezone`；是否让用户配置触发时刻）
+- 中文 lexical 检索升级：应用层 2-gram 预处理（新增预分词列 + 入库/查询双侧 bigram；§7.1 当前为显式降级，何时升级看实际搜索体感）
+- `interest_tags` / `locale` 变更后的批量 re-score / re-summarize 工具（§6.4 当前为不回填）
+- serverless 转写的 chunk 级断点续传（§11.2 当前为不支持）
 
 ---
 

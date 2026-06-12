@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { embed } from 'ai';
 import { getDbClient } from '../db';
-import { embeddingProviderOptions, resolveEmbedding } from '../ai';
+import { embeddingProviderOptions, recordUsage, resolveEmbedding } from '../ai';
 import { buildEmbeddingConfig, getUserSettings } from '../settings';
 import { rrfMerge } from './rrf';
 
@@ -61,11 +61,16 @@ export async function hybridSearch(
   `)) as unknown as Array<{ id: string }>;
 
   const cfg = buildEmbeddingConfig(settings);
-  const { embedding } = await embed({
+  const { embedding, usage } = await embed({
     model: resolveEmbedding(cfg),
     value: query,
     providerOptions: embeddingProviderOptions(cfg),
   });
+  // Record before the dim guard: usage is real even if the guard later throws.
+  await recordUsage(
+    { stage: 'search', itemId: null },
+    { kind: 'embedding', model: cfg.model, inputTokens: usage?.tokens ?? null, outputTokens: null, totalTokens: usage?.tokens ?? null },
+  );
   if (embedding.length !== settings.embedDim) {
     throw new Error(
       `Embedding dimension mismatch: got ${embedding.length}, expected ${settings.embedDim}. ` +
