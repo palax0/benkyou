@@ -114,3 +114,49 @@ export function LogoutIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// Content-type glyphs for the feed — same 20px/1.5-stroke family as the nav set.
+export function ArticleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5.5 3.5h5l4 4v8a1.5 1.5 0 0 1-1.5 1.5h-7.5A1.5 1.5 0 0 1 4 15.5v-10A1.5 1.5 0 0 1 5.5 3.5Z" />
+      <path d="M10.5 3.5v3.5a1 1 0 0 0 1 1H14" />
+      <path d="M6.75 11.5h6.5M6.75 14h4" />
+    </svg>
+  );
+}
+
+export function VideoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="3" y="4.5" width="14" height="11" rx="2" />
+      <path d="M8.5 7.75 12.25 10 8.5 12.25Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function DiscussionIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5v6a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 3v-3H5.5A1.5 1.5 0 0 1 4 11.5Z" />
+      <path d="M7.5 8.25h5M7.5 10.5h3" />
+    </svg>
+  );
+}
+
+export function PaperIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="4.5" y="3" width="11" height="14" rx="1.5" />
+      <path d="M8 6.5h4M7 9.25h6M7 11.75h6M7 14.25h3.5" />
+    </svg>
+  );
+}
+
+export function BookmarkIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h5A1.5 1.5 0 0 1 14 4.5V17l-4-2.75L6 17Z" />
+    </svg>
+  );
+}

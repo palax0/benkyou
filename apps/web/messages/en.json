@@ -23,7 +23,14 @@
     "prev": "Prev",
     "next": "Next",
     "filteredBy": "Source: {name} · {count} items",
-    "clearFilter": "Clear"
+    "clearFilter": "Clear",
+    "bookmarked": "Bookmarked",
+    "type": {
+      "article": "Article",
+      "video": "Video",
+      "discussion": "Discussion",
+      "paper": "Paper"
+    }
   },
   "settings": {
     "title": "Settings",
