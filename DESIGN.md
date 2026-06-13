@@ -296,8 +296,16 @@ serif「勉」字。这是品牌苔光色少数几个出场点之一。旁附 se
 - **Don't** 米色 / 奶油 / 羊皮纸底色冒充"日系纸质感"——纸感由排版与质感承载,不由暖白背景承载。
 - **Don't** 彩色侧条边框(`border-left` > 1px 做强调)、每节一个 uppercase 小眉题、
   千篇一律的 icon + 标题 + 描述卡片阵列、`01 / 02 / 03` 编号眉题。
-- **Don't** 在组件里写原始 hex、Tailwind 任意值方括号(`p-[13px]`、`bg-[#abc]`)、内联 `style=`,
-  或像 `LoginForm` 那样直接用 `slate-*` / `red-*`——全部走语义 token。
+- **Don't** 在组件里写原始 hex、Tailwind 颜色 / 间距 / 阴影 / 动效任意值方括号
+  (`p-[13px]`、`bg-[#abc]`)、内联 `style=`,或像 `LoginForm` 那样直接用 `slate-*` / `red-*`
+  ——全部走语义 token。结构性布局尺寸(导航 / 侧栏 / 抽屉宽度、表头高度)也要 token 化:
+  在 `globals.css` 定义 `--nav-w` / `--rail-w` / `--header-h` 等,组件用 `w-(--nav-w)` 组合,
+  而非 `w-[220px]`。
+  **允许的例外**:括号里装的是「值」(hex、长度、时间、颜色)才禁;装的是 CSS
+  关键字 / 属性名 / 标识符、没有对应设计 token 的,放行——例如 `content-['']`(伪元素)、
+  `transition-[width]`(指定动画属性,时长 / 缓动仍走 `duration-200 ease-out` token)、
+  以及 token 变量简写 `w-(--nav-w)` / `max-h-(--rail-max-h)`(其值在 `globals.css` 用
+  `calc(100dvh - var(--header-h))` 定义)。lint 规则按此区分,不要一刀切禁所有方括号。
 - **Don't** 用浅灰正文"显优雅":正文 ≥4.5:1,大字 ≥3:1,占位符同样 ≥4.5:1。
 - **Don't** display 衬线字体进 UI label / button / 数据。
 - **Don't** 给静止表面加投影、用任意 z-index(999 / 9999)、或让动效无 `motion-reduce` 降级。

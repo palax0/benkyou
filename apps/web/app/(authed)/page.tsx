@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Route } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { listFeed, getSourceName } from '@benkyou/core/items';
 import { ItemCard } from '@/components/ItemCard';
@@ -16,8 +17,9 @@ export default async function HomePage({
   const pageNum = Math.max(1, Number(page ?? '1') || 1);
   const feed = await listFeed({ limit: PAGE_SIZE, offset: (pageNum - 1) * PAGE_SIZE, sourceId: source });
   const sourceName = source ? await getSourceName(source) : null;
-  const qs = (p: number): string =>
-    source ? `/?source=${encodeURIComponent(source)}&page=${p}` : `/?page=${p}`;
+  // typedRoutes can't infer dynamic query strings; the path is a known static route.
+  const qs = (p: number): Route =>
+    (source ? `/?source=${encodeURIComponent(source)}&page=${p}` : `/?page=${p}`) as Route;
 
   return (
     <main>

@@ -27,38 +27,67 @@
 
   --err: oklch(0.5 0.16 25);
 
-  --shadow-floating: 0 8px 30px oklch(0.235 0.015 130 / 0.12);
+  --elevation-floating: 0 8px 30px oklch(0.235 0.015 130 / 0.12);
+
+  /* Dark palette source-of-truth. Defined once here; the two dark triggers below
+   * only re-point the semantic tokens at these, so a value tweak never drifts
+   * across the data-theme and prefers-color-scheme blocks. */
+  --dark-bg: oklch(0.17 0.008 130);
+  --dark-surface: oklch(0.205 0.009 130);
+  --dark-surface-2: oklch(0.225 0.01 130);
+  --dark-ink: oklch(0.925 0.005 130);
+  --dark-muted: oklch(0.745 0.012 130);
+  --dark-faint: oklch(0.68 0.012 130);
+  --dark-line: oklch(0.285 0.01 130);
+  --dark-accent: oklch(0.78 0.13 130);
+  --dark-accent-vivid: oklch(0.72 0.15 130);
+  --dark-accent-soft: oklch(0.72 0.15 130 / 0.14);
+  --dark-err: oklch(0.7 0.14 25);
+  --dark-elevation-floating: 0 8px 30px oklch(0 0 0 / 0.5);
+
+  /* Structural layout dimensions — spec §9.2 nav/rail sizing. Theme-invariant;
+   * tokenized so components compose via w-(--nav-w) instead of raw brackets. */
+  --nav-w: 220px;
+  --nav-w-collapsed: 60px;
+  --rail-w: 280px;
+  --header-h: 3rem;
+  --rail-max-h: calc(100dvh - var(--header-h));
+  --drawer-w: 260px;
+  --drawer-max-w: 80vw;
 }
 
+/* The two dark triggers carry identical re-pointing only — the values live in
+ * the --dark-* source above. (An attribute selector and a media query cannot
+ * share a rule block, so the assignment list is unavoidably written twice.) */
 [data-theme="dark"] {
-  --bg: oklch(0.17 0.008 130);
-  --surface: oklch(0.205 0.009 130);
-  --surface-2: oklch(0.225 0.01 130);
-  --ink: oklch(0.925 0.005 130);
-  --muted: oklch(0.745 0.012 130);
-  --faint: oklch(0.68 0.012 130);
-  --line: oklch(0.285 0.01 130);
-  --accent: oklch(0.78 0.13 130);
-  --accent-vivid: oklch(0.72 0.15 130);
-  --accent-soft: oklch(0.72 0.15 130 / 0.14);
-  --err: oklch(0.7 0.14 25);
-  --shadow-floating: 0 8px 30px oklch(0 0 0 / 0.5);
+  --bg: var(--dark-bg);
+  --surface: var(--dark-surface);
+  --surface-2: var(--dark-surface-2);
+  --ink: var(--dark-ink);
+  --muted: var(--dark-muted);
+  --faint: var(--dark-faint);
+  --line: var(--dark-line);
+  --accent: var(--dark-accent);
+  --accent-vivid: var(--dark-accent-vivid);
+  --accent-soft: var(--dark-accent-soft);
+  --err: var(--dark-err);
+  --elevation-floating: var(--dark-elevation-floating);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: oklch(0.17 0.008 130);
-    --surface: oklch(0.205 0.009 130);
-    --surface-2: oklch(0.225 0.01 130);
-    --ink: oklch(0.925 0.005 130);
-    --muted: oklch(0.745 0.012 130);
-    --faint: oklch(0.68 0.012 130);
-    --line: oklch(0.285 0.01 130);
-    --accent: oklch(0.78 0.13 130);
-    --accent-vivid: oklch(0.72 0.15 130);
-    --accent-soft: oklch(0.72 0.15 130 / 0.14);
-    --err: oklch(0.7 0.14 25);
-    --shadow-floating: 0 8px 30px oklch(0 0 0 / 0.5);
+    --bg: var(--dark-bg);
+    --surface: var(--dark-surface);
+    --surface-2: var(--dark-surface-2);
+    --ink: var(--dark-ink);
+    --muted: var(--dark-muted);
+    --faint: var(--dark-faint);
+    --line: var(--dark-line);
+    --accent: var(--dark-accent);
+    --accent-vivid: var(--dark-accent-vivid);
+    --accent-soft: var(--dark-accent-soft);
+    --err: var(--dark-err);
+    --elevation-floating: var(--dark-elevation-floating);
   }
 }
 
@@ -99,7 +128,7 @@
   --z-toast: 50;
   --z-tooltip: 60;
 
-  --shadow-floating: var(--shadow-floating);
+  --shadow-floating: var(--elevation-floating);
 }
 
 @layer base {

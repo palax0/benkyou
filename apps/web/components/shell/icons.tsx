@@ -56,9 +56,11 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base(props)}>
       <path d="M4 6h12M4 10h12M4 14h12" />
-      <circle cx="7.5" cy="6" r="1.75" fill="var(--bg)" />
-      <circle cx="12.5" cy="10" r="1.75" fill="var(--bg)" />
-      <circle cx="9" cy="14" r="1.75" fill="var(--bg)" />
+      {/* solid currentColor handles — background-agnostic (a --bg knockout would
+          mismatch on surface-2 nav / accent-soft active states). */}
+      <circle cx="7.5" cy="6" r="1.75" fill="currentColor" stroke="none" />
+      <circle cx="12.5" cy="10" r="1.75" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="14" r="1.75" fill="currentColor" stroke="none" />
     </svg>
   );
 }

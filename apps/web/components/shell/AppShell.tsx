@@ -1,17 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { NavList } from './NavList';
 import { LocaleSwitcher } from './LocaleSwitcher';
+import { useGlobalSearchShortcut, useShellState } from './useShellState';
 import { LogoutButton } from '@/components/LogoutButton';
 import { CloseIcon, CollapseIcon, ExpandIcon, MenuIcon, RailIcon } from './icons';
-
-function persist(name: 'bk_nav' | 'bk_rail', value: string): void {
-  document.cookie = `${name}=${value}; path=/; max-age=31536000; samesite=lax`;
-}
 
 function Wordmark({ compact, onNavigate }: { compact?: boolean; onNavigate?: () => void }) {
   return (
@@ -60,7 +56,7 @@ function MobileDrawer({
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="m-0 h-dvh max-h-none w-[260px] max-w-[80vw] -translate-x-full bg-surface-2 text-ink transition-transform duration-300 ease-out backdrop:bg-ink/25 open:translate-x-0 starting:open:-translate-x-full motion-reduce:transition-none"
+      className="m-0 h-dvh max-h-none w-(--drawer-w) max-w-(--drawer-max-w) -translate-x-full bg-surface-2 text-ink transition-transform duration-300 ease-out backdrop:bg-ink/25 open:translate-x-0 starting:open:-translate-x-full motion-reduce:transition-none"
     >
       {children}
     </dialog>
@@ -79,33 +75,9 @@ export function AppShell({
   children: ReactNode;
 }) {
   const t = useTranslations('shell');
-  const router = useRouter();
-  const [collapsed, setCollapsed] = useState(initialNavCollapsed);
-  const [railHidden, setRailHidden] = useState(initialRailHidden);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent): void {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        router.push('/search');
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [router]);
-
-  function toggleNav(): void {
-    const next = !collapsed;
-    setCollapsed(next);
-    persist('bk_nav', next ? 'collapsed' : 'expanded');
-  }
-
-  function toggleRail(): void {
-    const next = !railHidden;
-    setRailHidden(next);
-    persist('bk_rail', next ? 'hidden' : 'shown');
-  }
+  const { collapsed, railHidden, drawerOpen, toggleNav, toggleRail, openDrawer, closeDrawer } =
+    useShellState({ navCollapsed: initialNavCollapsed, railHidden: initialRailHidden });
+  useGlobalSearchShortcut();
 
   return (
     <div className="flex min-h-dvh">
@@ -119,7 +91,7 @@ export function AppShell({
       {/* Desktop nav — spec §9.2: 60px collapsed / 220px expanded */}
       <aside
         className={`sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden border-r border-line bg-surface-2 py-4 transition-[width] duration-200 ease-out lg:flex motion-reduce:transition-none ${
-          collapsed ? 'w-[60px] px-2.5' : 'w-[220px] px-3'
+          collapsed ? 'w-(--nav-w-collapsed) px-2.5' : 'w-(--nav-w) px-3'
         }`}
       >
         <div className="mb-6">
@@ -147,7 +119,7 @@ export function AppShell({
         <header className="sticky top-0 z-sticky flex h-12 shrink-0 items-center gap-1 border-b border-line bg-bg px-3 lg:px-5">
           <button
             type="button"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
             title={t('openMenu')}
             aria-label={t('openMenu')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors duration-150 hover:bg-ink/5 hover:text-ink lg:hidden motion-reduce:transition-none"
@@ -180,7 +152,7 @@ export function AppShell({
           {!railHidden && (
             <aside
               aria-label={t('contextRail')}
-              className="sticky top-12 hidden max-h-[calc(100dvh-3rem)] w-[280px] shrink-0 self-start overflow-y-auto border-l border-line px-5 py-6 xl:block"
+              className="sticky top-12 hidden max-h-(--rail-max-h) w-(--rail-w) shrink-0 self-start overflow-y-auto border-l border-line px-5 py-6 xl:block"
             >
               {rail}
             </aside>
@@ -188,13 +160,13 @@ export function AppShell({
         </div>
       </div>
 
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} label={t('mainNav')}>
+      <MobileDrawer open={drawerOpen} onClose={closeDrawer} label={t('mainNav')}>
         <div className="flex h-full flex-col p-4">
           <div className="mb-6 flex items-center justify-between">
-            <Wordmark onNavigate={() => setDrawerOpen(false)} />
+            <Wordmark onNavigate={closeDrawer} />
             <button
               type="button"
-              onClick={() => setDrawerOpen(false)}
+              onClick={closeDrawer}
               title={t('closeMenu')}
               aria-label={t('closeMenu')}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors duration-150 hover:bg-ink/5 hover:text-ink motion-reduce:transition-none"
@@ -203,7 +175,7 @@ export function AppShell({
             </button>
           </div>
           <nav aria-label={t('mainNav')}>
-            <NavList collapsed={false} showShortcut={false} onNavigate={() => setDrawerOpen(false)} />
+            <NavList collapsed={false} showShortcut={false} onNavigate={closeDrawer} />
           </nav>
         </div>
       </MobileDrawer>
