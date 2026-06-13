@@ -1,8 +1,30 @@
 {
-  "home": { "title": "Benkyou", "subtitle": "Personal AI news aggregator" },
-  "login": { "title": "Sign in", "password": "Password", "submit": "Sign in", "invalid": "Wrong password" },
-  "nav": { "feed": "Feed", "search": "Search", "sources": "Sources", "jobs": "Pipeline", "settings": "Settings", "logout": "Sign out" },
-  "feed": { "title": "Feed", "empty": "Nothing yet. Items appear ~2 min after adding a source.", "prev": "Prev", "next": "Next", "filteredBy": "Source: {name} · {count} items", "clearFilter": "Clear" },
+  "home": {
+    "title": "Benkyou",
+    "subtitle": "Personal AI news aggregator"
+  },
+  "login": {
+    "title": "Sign in",
+    "password": "Password",
+    "submit": "Sign in",
+    "invalid": "Wrong password"
+  },
+  "nav": {
+    "feed": "Feed",
+    "search": "Search",
+    "sources": "Sources",
+    "jobs": "Pipeline",
+    "settings": "Settings",
+    "logout": "Sign out"
+  },
+  "feed": {
+    "title": "Feed",
+    "empty": "Nothing yet. Items appear ~2 min after adding a source.",
+    "prev": "Prev",
+    "next": "Next",
+    "filteredBy": "Source: {name} · {count} items",
+    "clearFilter": "Clear"
+  },
   "settings": {
     "title": "Settings",
     "providerSection": "Model configuration",
@@ -32,8 +54,18 @@
     "embedFailed": "Embedding connection failed: {error}",
     "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}."
   },
-  "item": { "deepSummary": "AI deep summary", "generating": "Generating…", "noSummary": "No summary", "original": "Original", "noContent": "No content" },
-  "search": { "title": "Search", "placeholder": "Search…", "noResults": "No results" },
+  "item": {
+    "deepSummary": "AI deep summary",
+    "generating": "Generating…",
+    "noSummary": "No summary",
+    "original": "Original",
+    "noContent": "No content"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search…",
+    "noResults": "No results"
+  },
   "setup": {
     "title": "Initialize Benkyou",
     "needInitialPassword": "Set INITIAL_PASSWORD in .env first, then refresh this page.",
@@ -115,5 +147,30 @@
     "drift": "Dimension drift",
     "driftOk": "✓ Dimensions consistent ({dim})",
     "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim."
+  },
+  "shell": {
+    "skipToContent": "Skip to content",
+    "mainNav": "Main navigation",
+    "contextRail": "Context panel",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "collapseNav": "Collapse sidebar",
+    "expandNav": "Expand sidebar",
+    "hideRail": "Hide context panel",
+    "showRail": "Show context panel",
+    "switchLocale": "切换到中文界面",
+    "interests": "Interests",
+    "topSources": "Top sources",
+    "today": "Today",
+    "addedToday": "Added",
+    "doneToday": "Processed",
+    "inFlight": "In progress",
+    "failed": "Failed",
+    "viewPipeline": "View pipeline →",
+    "noInterests": "No interest tags yet.",
+    "addInterests": "Add in Settings",
+    "noSources": "No sources yet.",
+    "addSources": "Add a source",
+    "itemCount": "{count}"
   }
 }

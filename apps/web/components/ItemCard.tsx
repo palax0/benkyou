@@ -11,8 +11,8 @@ const TYPE_ICON: Record<string, string> = {
 
 export function ItemCard({ item }: { item: FeedItem }) {
   return (
-    <article className="rounded border border-slate-200 p-3 dark:border-slate-700">
-      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+    <article className="rounded border border-line bg-surface p-3">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-faint">
         <span>{TYPE_ICON[item.contentType] ?? '📄'}</span>
         <SourceBadge id={item.sourceId} name={item.sourceName} />
         {item.category ? <span>· {item.category === 'news' ? '📰' : '📚'}</span> : null}
@@ -21,9 +21,7 @@ export function ItemCard({ item }: { item: FeedItem }) {
       <h2 className="font-semibold">
         <Link href={`/items/${item.id}`}>{item.title}</Link>
       </h2>
-      {item.summary ? (
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{item.summary}</p>
-      ) : null}
+      {item.summary ? <p className="mt-1 text-sm text-muted">{item.summary}</p> : null}
     </article>
   );
 }
