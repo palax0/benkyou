@@ -1,31 +1,22 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
 import { isInitialized } from '@benkyou/core/setup';
 import { getValidSession } from '@/lib/auth';
-import { LogoutButton } from '@/components/LogoutButton';
+import { AppShell } from '@/components/shell/AppShell';
+import { ContextRail } from '@/components/shell/ContextRail';
 
 export default async function AuthedLayout({ children }: { children: ReactNode }) {
   if (!(await isInitialized())) redirect('/setup');
   if (!(await getValidSession())) redirect('/login');
-  const t = await getTranslations('nav');
+  const store = await cookies();
   return (
-    <div className="mx-auto max-w-3xl p-4">
-      <header className="mb-6 flex items-center gap-4 border-b border-slate-200 pb-3 dark:border-slate-700">
-        <Link href="/" className="font-bold">Benkyou</Link>
-        <nav className="flex gap-3 text-sm">
-          <Link href="/">{t('feed')}</Link>
-          <Link href="/search">{t('search')}</Link>
-          <Link href="/sources">{t('sources')}</Link>
-          <Link href="/admin/jobs">{t('jobs')}</Link>
-          <Link href="/settings">{t('settings')}</Link>
-        </nav>
-        <div className="ml-auto">
-          <LogoutButton />
-        </div>
-      </header>
+    <AppShell
+      initialNavCollapsed={store.get('bk_nav')?.value === 'collapsed'}
+      initialRailHidden={store.get('bk_rail')?.value === 'hidden'}
+      rail={<ContextRail />}
+    >
       {children}
-    </div>
+    </AppShell>
   );
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { sourceSans, sourceSerif } from './fonts';
 import './globals.css';
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
@@ -8,8 +9,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
-      <body className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <html lang={locale} className={`${sourceSans.variable} ${sourceSerif.variable}`}>
+      <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>

@@ -12,13 +12,20 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
   return (
     <main className="flex flex-col gap-4">
       <header>
-        <h1 className="text-2xl font-bold">{item.title}</h1>
-        <div className="mt-1 text-sm text-slate-500">
+        <h1 className="font-serif text-2xl leading-snug font-semibold text-balance text-ink">
+          {item.title}
+        </h1>
+        <div className="mt-2 text-sm text-muted">
           {item.sourceName ? <span>{item.sourceName}</span> : null}
           {item.author ? <span> · {item.author}</span> : null}
           {item.publishedAt ? <span> · {new Date(item.publishedAt).toLocaleDateString()}</span> : null}
           {' · '}
-          <a href={item.url} target="_blank" rel="noreferrer" className="underline">
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline-offset-2 transition-colors duration-150 hover:underline motion-reduce:transition-none"
+          >
             {t('original')}
           </a>
         </div>
@@ -29,7 +36,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       {item.rawContent ? (
         <article className="whitespace-pre-wrap text-sm leading-relaxed">{item.rawContent}</article>
       ) : (
-        <p className="text-sm text-slate-500">{t('noContent')}</p>
+        <p className="text-sm text-muted">{t('noContent')}</p>
       )}
     </main>
   );

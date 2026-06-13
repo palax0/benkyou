@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-13T00:00:00Z",
+  "title": "Design System: Benkyou",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "苔藓绿 / Moss Green",
+        "canonical": "oklch(0.46 0.115 130)",
+        "tonalRamp": [
+          "oklch(0.2 0.06 130)",
+          "oklch(0.3 0.09 130)",
+          "oklch(0.38 0.11 130)",
+          "oklch(0.46 0.115 130)",
+          "oklch(0.55 0.13 130)",
+          "oklch(0.64 0.13 130)",
+          "oklch(0.78 0.1 130)",
+          "oklch(0.92 0.04 130)"
+        ]
+      },
+      "accent-vivid": {
+        "role": "primary",
+        "displayName": "苔光 / Moss Glow",
+        "canonical": "oklch(0.6 0.154 130)",
+        "tonalRamp": [
+          "oklch(0.25 0.08 130)",
+          "oklch(0.35 0.11 130)",
+          "oklch(0.45 0.14 130)",
+          "oklch(0.6 0.154 130)",
+          "oklch(0.7 0.15 130)",
+          "oklch(0.78 0.13 130)",
+          "oklch(0.86 0.09 130)",
+          "oklch(0.94 0.04 130)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "墨 / Ink",
+        "canonical": "oklch(0.235 0.015 130)",
+        "tonalRamp": [
+          "oklch(0.17 0.008 130)",
+          "oklch(0.235 0.015 130)",
+          "oklch(0.32 0.018 130)",
+          "oklch(0.45 0.02 130)",
+          "oklch(0.54 0.015 130)",
+          "oklch(0.7 0.012 130)",
+          "oklch(0.85 0.008 130)",
+          "oklch(0.95 0.004 130)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "底 / Background",
+        "canonical": "oklch(0.985 0.003 130)",
+        "tonalRamp": [
+          "oklch(0.17 0.008 130)",
+          "oklch(0.205 0.009 130)",
+          "oklch(0.285 0.01 130)",
+          "oklch(0.45 0.02 130)",
+          "oklch(0.7 0.012 130)",
+          "oklch(0.905 0.007 130)",
+          "oklch(0.962 0.005 130)",
+          "oklch(0.985 0.003 130)"
+        ]
+      },
+      "err": {
+        "role": "tertiary",
+        "displayName": "警示 / Error",
+        "canonical": "oklch(0.5 0.16 25)",
+        "tonalRamp": [
+          "oklch(0.3 0.1 25)",
+          "oklch(0.4 0.14 25)",
+          "oklch(0.5 0.16 25)",
+          "oklch(0.6 0.16 25)",
+          "oklch(0.7 0.14 25)",
+          "oklch(0.8 0.1 25)",
+          "oklch(0.88 0.06 25)",
+          "oklch(0.95 0.03 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display / Title", "purpose": "条目标题、刊头、勉字徽标 —— 衬线,阅读流里的『这值得读』信号。" },
+      "body": { "displayName": "Body", "purpose": "摘要、正文、段落 —— 无衬线,行长 ≤ 65–75ch,行高从容。" },
+      "label": { "displayName": "Label / Meta", "purpose": "类型标签(uppercase tracked)、来源、日期、计数(tabular-nums)。" }
+    },
+    "shadows": [
+      { "name": "floating", "value": "0 8px 30px oklch(0.235 0.015 130 / 0.12)", "purpose": "仅用于真正脱离文档流的悬浮层(下拉、弹出、浮动卡)。暗色模式为 0 8px 30px oklch(0 0 0 / 0.5)。阴影带苔色相,不用中性黑。" },
+      { "name": "focus-ring", "value": "outline: 2px solid var(--accent); outline-offset: 2px", "purpose": "全局 :focus-visible。键盘可达底线,非装饰。" }
+    ],
+    "motion": [
+      { "name": "color-150", "value": "150ms ease-out", "purpose": "色彩 / hover 状态过渡(链接、nav、按钮、行染色)。" },
+      { "name": "width-200", "value": "200ms ease-out", "purpose": "侧栏折叠 / 展开的宽度过渡。" },
+      { "name": "drawer-300", "value": "300ms ease-out", "purpose": "移动端抽屉 translate 滑入。" },
+      { "name": "reduced-motion", "value": "motion-reduce:transition-none", "purpose": "每个过渡的 prefers-reduced-motion 降级——直接切换,无过渡。" }
+    ],
+    "breakpoints": [
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主操作 / 提交。苔光色填充,是 ≤10% 品牌色少数被允许成为色块的地方。",
+      "html": "<button class=\"ds-btn-primary\" type=\"submit\">提交 · Submit</button>",
+      "css": ".ds-btn-primary { background: var(--accent-vivid, oklch(0.6 0.154 130)); color: var(--bg, oklch(0.985 0.003 130)); font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1rem; border: none; border-radius: 0.375rem; cursor: pointer; transition: background 150ms ease-out; } .ds-btn-primary:hover { background: var(--accent, oklch(0.46 0.115 130)); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, oklch(0.46 0.115 130)); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; } @media (prefers-reduced-motion: reduce) { .ds-btn-primary { transition: none; } }"
+    },
+    {
+      "name": "Ghost Icon Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "顶栏 / 侧栏图标按钮、折叠钮、locale 切换。透明底,hover 薄染。",
+      "html": "<button class=\"ds-btn-ghost\" aria-label=\"Toggle\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"/><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"/><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"/></svg></button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 2rem; width: 2rem; background: transparent; color: var(--muted, oklch(0.45 0.02 130)); border: none; border-radius: 0.375rem; cursor: pointer; transition: background 150ms ease-out, color 150ms ease-out; } .ds-btn-ghost:hover { background: color-mix(in oklch, var(--ink, oklch(0.235 0.015 130)) 5%, transparent); color: var(--ink, oklch(0.235 0.015 130)); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, oklch(0.46 0.115 130)); outline-offset: 2px; } @media (prefers-reduced-motion: reduce) { .ds-btn-ghost { transition: none; } }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "侧栏导航项。默认静音,当前态用苔晕背景 + 苔绿文字。",
+      "html": "<a class=\"ds-nav-item ds-nav-item--active\" href=\"#\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 6h16M4 12h16M4 18h10\"/></svg><span>Feed</span></a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 0.625rem; height: 2.25rem; padding: 0 0.625rem; border-radius: 0.375rem; font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.875rem; white-space: nowrap; text-decoration: none; color: var(--muted, oklch(0.45 0.02 130)); transition: background 150ms ease-out, color 150ms ease-out; } .ds-nav-item:hover { background: color-mix(in oklch, var(--ink, oklch(0.235 0.015 130)) 5%, transparent); color: var(--ink, oklch(0.235 0.015 130)); } .ds-nav-item--active { background: var(--accent-soft, oklch(0.6 0.154 130 / 0.1)); color: var(--accent, oklch(0.46 0.115 130)); font-weight: 500; } .ds-nav-item:focus-visible { outline: 2px solid var(--accent, oklch(0.46 0.115 130)); outline-offset: 2px; } @media (prefers-reduced-motion: reduce) { .ds-nav-item { transition: none; } }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Token 正确的输入框(替代旧 slate-* 表单)。surface 底,line 描边,苔绿聚焦环。",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"粘贴 URL 入库…\" />",
+      "css": ".ds-input { width: 100%; background: var(--surface, oklch(1 0 0)); color: var(--ink, oklch(0.235 0.015 130)); font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.875rem; padding: 0.5rem 0.75rem; border: 1px solid var(--line, oklch(0.905 0.007 130)); border-radius: 0.375rem; transition: border-color 150ms ease-out; } .ds-input::placeholder { color: var(--faint, oklch(0.54 0.015 130)); } .ds-input:focus-visible { outline: 2px solid var(--accent, oklch(0.46 0.115 130)); outline-offset: 2px; border-color: var(--accent, oklch(0.46 0.115 130)); } .ds-input:disabled { opacity: 0.5; } @media (prefers-reduced-motion: reduce) { .ds-input { transition: none; } }"
+    },
+    {
+      "name": "Interest Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "兴趣标签。全圆角描边,静态展示型(非过滤)。",
+      "html": "<span class=\"ds-chip\">AI Agents</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; background: transparent; color: var(--muted, oklch(0.45 0.02 130)); font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.75rem; padding: 0.125rem 0.625rem; border: 1px solid var(--line, oklch(0.905 0.007 130)); border-radius: 9999px; }"
+    },
+    {
+      "name": "Feed Row",
+      "kind": "card",
+      "refersTo": "feed-row",
+      "description": "签名组件:条目是列表行而非卡片。hover 时 surface-2 薄染向左右溢出,整行可点。",
+      "html": "<article class=\"ds-feed-row\"><div class=\"ds-feed-meta\"><span class=\"ds-feed-type\">ARTICLE</span><span class=\"ds-feed-dot\">·</span><span>Hacker News</span><span class=\"ds-feed-dot\">·</span><time class=\"ds-feed-date\">2026-06-13</time></div><h2 class=\"ds-feed-title\"><a href=\"#\">为什么注意力是新的稀缺资源</a></h2><p class=\"ds-feed-summary\">一篇关于信息过载与高质量信源筛选的深度文章,讨论了 AI 打分过滤的可行边界。</p></article>",
+      "css": ".ds-feed-row { position: relative; isolation: isolate; padding: 1rem 0; } .ds-feed-row::before { content: ''; position: absolute; inset: 0 -0.75rem; z-index: -1; border-radius: 0.5rem; background: transparent; transition: background 150ms ease-out; } .ds-feed-row:hover::before { background: var(--surface-2, oklch(0.962 0.005 130)); } .ds-feed-meta { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.75rem; } .ds-feed-type { font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint, oklch(0.54 0.015 130)); } .ds-feed-dot { color: var(--line, oklch(0.905 0.007 130)); } .ds-feed-meta > span:not(.ds-feed-type):not(.ds-feed-dot) { color: var(--muted, oklch(0.45 0.02 130)); } .ds-feed-date { color: var(--faint, oklch(0.54 0.015 130)); font-variant-numeric: tabular-nums; } .ds-feed-title { margin: 0.375rem 0 0; font-family: var(--font-serif, 'Source Serif 4', Georgia, serif); font-size: 1.125rem; line-height: 1.375; font-weight: 600; color: var(--ink, oklch(0.235 0.015 130)); } .ds-feed-title a { color: inherit; text-decoration: none; transition: color 150ms ease-out; } .ds-feed-title a::after { content: ''; position: absolute; inset: 0 -0.75rem; border-radius: 0.5rem; } .ds-feed-title a:hover { color: var(--accent, oklch(0.46 0.115 130)); } .ds-feed-summary { margin: 0.25rem 0 0; font-family: var(--font-sans, 'Source Sans 3', system-ui, sans-serif); font-size: 0.875rem; line-height: 1.625; color: var(--muted, oklch(0.45 0.02 130)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } @media (prefers-reduced-motion: reduce) { .ds-feed-row::before, .ds-feed-title a { transition: none; } }"
+    },
+    {
+      "name": "Wordmark",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "勉字徽标:苔晕方块 + 苔光色 serif『勉』。品牌色少数出场点之一。",
+      "html": "<a class=\"ds-wordmark\" href=\"#\"><span class=\"ds-wordmark-glyph\" aria-hidden=\"true\">勉</span><span class=\"ds-wordmark-text\">Benkyou</span></a>",
+      "css": ".ds-wordmark { display: inline-flex; align-items: center; gap: 0.625rem; text-decoration: none; border-radius: 0.375rem; padding: 0 0.25rem; } .ds-wordmark-glyph { display: grid; place-items: center; height: 2rem; width: 2rem; border-radius: 0.375rem; background: var(--accent-soft, oklch(0.6 0.154 130 / 0.1)); color: var(--accent-vivid, oklch(0.6 0.154 130)); font-family: var(--font-serif, 'Source Serif 4', Georgia, serif); font-size: 1.125rem; line-height: 1; } .ds-wordmark-text { font-family: var(--font-serif, 'Source Serif 4', Georgia, serif); font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink, oklch(0.235 0.015 130)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "苔庭の文庫 (The Moss-Garden Bunko)",
+    "overview": "一本认真维护的文库本,摊开在能望见苔庭的书桌上。Benkyou 的视觉系统服务于一件事:让人安静地读完今天值得读的东西。界面是书桌而非展台——结构清晰、密度充足、装饰克制;品牌的「温和 · 学习感 · 个人化」由排版的敬意、苔藓绿的少量点睛、细节处的手艺感承载,而不是由背景色的『暖』或大面积的留白承载。这是 product 寄存器:设计服务于任务,工具退到任务背后。可信赖的熟悉感是一种特性——导航是侧栏 + 顶栏 + Cmd+K,卡片读起来像 Linear / Notion 那样不出戏。手艺感留给瞬间(空状态、骨架屏、微动效),不铺满每一屏。",
+    "keyCharacteristics": [
+      "阅读优先:正文排版是第一公民,阅读时 UI 退到背景",
+      "密度即尊重:靠字重 / 字号 / 留白节奏区分主次,而非砍内容",
+      "苔藓绿点睛 ≤10%:颜色的稀缺本身就是设计",
+      "中英混排一等公民:字体栈、行高、断行在 zh / en 两个 locale 下同等推敲",
+      "平面为本:静止界面靠色阶分层,深度只作为状态反馈出现",
+      "手艺感在细节:空状态、骨架屏、微动效、平静语气的状态横幅"
+    ],
+    "rules": [
+      { "name": "The Restrained Rule", "body": "品牌苔藓绿在任意一屏占比 ≤10%。只属于链接、当前态导航、徽标、聚焦环、主操作、状态指示;正文区永远中性底 + 高对比墨色。克制就是气质。", "section": "colors" },
+      { "name": "The One-Hue Rule", "body": "整个中性体系沿 hue 130° 微染(chroma ≤0.02),禁止默认暖向调色。warm-cream / sand / parchment 是要避开的 AI 俗套——纸感由排版承载,不由暖白背景承载。", "section": "colors" },
+      { "name": "The White-on-Saturated Rule", "body": "在饱和中明度色块上文字一律用近白(--bg);深字只许出现在极浅或纯中性底上(Helmholtz–Kohlrausch)。", "section": "colors" },
+      { "name": "The Bilingual Rule", "body": "任何排版决策(字号、行高、断行、标点、字重)必须在 zh 和 en 两个 locale 下分别验证;中英混排不是英文排版的附属品。", "section": "typography" },
+      { "name": "The Serif-Means-Read Rule", "body": "衬线只用于内容层(标题、刊头、徽标);UI 控件、按钮、标签、数据一律无衬线。", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "表面静止时一律平。阴影只回应状态(hover、悬浮、聚焦)。列表行不靠投影成卡,靠 hover 时 --surface-2 薄染。", "section": "elevation" },
+      { "name": "The No-Card Rule", "body": "feed 不用盒装卡片。条目是列表行(无边框无投影),hover 时一层 --surface-2 薄染向左右溢出,整行可点。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 把品牌苔藓绿当稀缺资源(≤10%):链接、当前态导航、徽标、聚焦环、主操作、状态指示——其余皆中性。",
+      "Do 整个中性体系沿 hue 130° 微染(chroma ≤0.02);用真灰白底,不用暖白。",
+      "Do 在 zh / en 两个 locale 下分别检查每个排版改动。",
+      "Do 衬线只给内容(标题、刊头、徽标),无衬线给一切 UI。",
+      "Do 让 feed 一屏呈现足量条目,用字重 / 字号 / 留白节奏区分主次,而不是砍内容。",
+      "Do 用列表行 + hover 薄染,不要盒装卡片。",
+      "Do 静止界面保持平面,阴影只回应状态。",
+      "Do 为每个动效写 motion-reduce 降级;过渡 150–300ms,ease-out,不弹跳。",
+      "Do 每个交互组件交齐 default / hover / focus-visible / disabled。",
+      "Do 认真做空状态、骨架屏、错误横幅——平静的语气,明确的下一步。",
+      "Do 一切颜色走语义 token,组件绝不碰原始 OKLCH 值。"
+    ],
+    "donts": [
+      "Don't SaaS 营销风:渐变大字、background-clip:text 渐变文字、玻璃拟态、英雄区指标卡。",
+      "Don't 陈旧后台管理风:Ant Design 默认蓝、表格堆满、毫无排版层次的 admin 模板感。",
+      "Don't 过度极简留白风:一屏只显示三条内容的『好看』。",
+      "Don't 信息流社交风:无限刺激、大图卡片轰炸、互动按钮堆叠、注意力劫持模式。",
+      "Don't 米色 / 奶油 / 羊皮纸底色冒充『日系纸质感』——纸感由排版与质感承载。",
+      "Don't 彩色侧条边框(border-left >1px 做强调)、每节一个 uppercase 小眉题、千篇一律 icon+标题+描述卡片阵列、01/02/03 编号眉题。",
+      "Don't 在组件里写原始 hex、Tailwind 任意值方括号(p-[13px]、bg-[#abc])、内联 style=,或像 LoginForm 那样直接用 slate-* / red-*——全部走语义 token。",
+      "Don't 用浅灰正文『显优雅』:正文 ≥4.5:1,大字 ≥3:1,占位符同样 ≥4.5:1。",
+      "Don't display 衬线字体进 UI label / button / 数据。",
+      "Don't 给静止表面加投影、用任意 z-index(999/9999)、或让动效无 motion-reduce 降级。"
+    ]
+  }
+}

@@ -1,1 +1,169 @@
 @import "tailwindcss";
+
+/*
+ * Benkyou visual system — "苔庭の文庫".
+ * Semantic tokens only; components never reference raw OKLCH values.
+ * Light is the base; dark redefines the same semantic layer (DESIGN.md:
+ * dark mode is a calibrated theme, not an inversion).
+ *
+ * Manual theme override (spec §9.3) hooks: settings page sets
+ * data-theme="dark" | "light" on <html>; absent attribute = follow system.
+ */
+
+:root {
+  /* neutrals tinted toward the moss hue (130), chroma ≤0.012 — never warm-cream */
+  --bg: oklch(0.985 0.003 130);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.962 0.005 130); /* nav / rail second neutral layer */
+  --ink: oklch(0.235 0.015 130);
+  --muted: oklch(0.45 0.02 130);
+  --faint: oklch(0.54 0.015 130); /* placeholders, disabled — still ≥4.5:1 on bg */
+  --line: oklch(0.905 0.007 130);
+
+  /* moss green, hue 130 anchor oklch(0.60 0.154 130), per-mode L/C calibration */
+  --accent: oklch(0.46 0.115 130); /* interactive text & icons, ≥4.5:1 on bg */
+  --accent-vivid: oklch(0.6 0.154 130); /* the brand anchor: marks, large glyphs */
+  --accent-soft: oklch(0.6 0.154 130 / 0.1); /* active-nav wash */
+
+  --err: oklch(0.5 0.16 25);
+
+  --elevation-floating: 0 8px 30px oklch(0.235 0.015 130 / 0.12);
+
+  /* Dark palette source-of-truth. Defined once here; the two dark triggers below
+   * only re-point the semantic tokens at these, so a value tweak never drifts
+   * across the data-theme and prefers-color-scheme blocks. */
+  --dark-bg: oklch(0.17 0.008 130);
+  --dark-surface: oklch(0.205 0.009 130);
+  --dark-surface-2: oklch(0.225 0.01 130);
+  --dark-ink: oklch(0.925 0.005 130);
+  --dark-muted: oklch(0.745 0.012 130);
+  --dark-faint: oklch(0.68 0.012 130);
+  --dark-line: oklch(0.285 0.01 130);
+  --dark-accent: oklch(0.78 0.13 130);
+  --dark-accent-vivid: oklch(0.72 0.15 130);
+  --dark-accent-soft: oklch(0.72 0.15 130 / 0.14);
+  --dark-err: oklch(0.7 0.14 25);
+  --dark-elevation-floating: 0 8px 30px oklch(0 0 0 / 0.5);
+
+  /* Structural layout dimensions — spec §9.2 nav/rail sizing. Theme-invariant;
+   * tokenized so components compose via w-(--nav-w) instead of raw brackets. */
+  --nav-w: 220px;
+  --nav-w-collapsed: 60px;
+  --rail-w: 280px;
+  --header-h: 3rem;
+  --rail-max-h: calc(100dvh - var(--header-h));
+  --drawer-w: 260px;
+  --drawer-max-w: 80vw;
+}
+
+/* The two dark triggers carry identical re-pointing only — the values live in
+ * the --dark-* source above. (An attribute selector and a media query cannot
+ * share a rule block, so the assignment list is unavoidably written twice.) */
+[data-theme="dark"] {
+  --bg: var(--dark-bg);
+  --surface: var(--dark-surface);
+  --surface-2: var(--dark-surface-2);
+  --ink: var(--dark-ink);
+  --muted: var(--dark-muted);
+  --faint: var(--dark-faint);
+  --line: var(--dark-line);
+  --accent: var(--dark-accent);
+  --accent-vivid: var(--dark-accent-vivid);
+  --accent-soft: var(--dark-accent-soft);
+  --err: var(--dark-err);
+  --elevation-floating: var(--dark-elevation-floating);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--dark-bg);
+    --surface: var(--dark-surface);
+    --surface-2: var(--dark-surface-2);
+    --ink: var(--dark-ink);
+    --muted: var(--dark-muted);
+    --faint: var(--dark-faint);
+    --line: var(--dark-line);
+    --accent: var(--dark-accent);
+    --accent-vivid: var(--dark-accent-vivid);
+    --accent-soft: var(--dark-accent-soft);
+    --err: var(--dark-err);
+    --elevation-floating: var(--dark-elevation-floating);
+  }
+}
+
+/* `dark:` must track both the system preference and the manual override,
+ * so the Tailwind default (media-only) is replaced wholesale. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-vivid: var(--accent-vivid);
+  --color-accent-soft: var(--accent-soft);
+  --color-err: var(--err);
+
+  --font-sans: var(--font-source-sans), "Noto Sans SC", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), "Noto Serif SC", "Source Han Serif SC",
+    "Songti SC", serif;
+
+  /* semantic z-scale; never arbitrary values */
+  --z-sticky: 10;
+  --z-drawer: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+
+  --shadow-floating: var(--elevation-floating);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      color-scheme: dark;
+    }
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-kerning: normal;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::placeholder {
+    color: var(--faint);
+  }
+}

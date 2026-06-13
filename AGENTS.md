@@ -48,7 +48,7 @@ docs/
 **Where to put new code**:
 - Pure business logic (a new pipeline stage, a new search ranking strategy) → `packages/core/src/{pipeline,search,...}`
 - New REST/Server Action endpoint → `apps/web/app/api/...` (thin layer that calls into `@benkyou/core`)
-- New background job handler → register in `apps/worker/src/loop.ts` + handler in `packages/core/src/pipeline/`
+- New background job handler → register in BOTH `packages/core/src/queue/{loop,batch}.ts` dispatchers + handler in `packages/core/src/pipeline/`
 - New React component → `apps/web/components/` (or co-located in route folder if single-use)
 
 **Where NOT to put code**:
@@ -153,3 +153,44 @@ pnpm --filter @benkyou/web dev
 - More than 200 lines of new code in one task → consider whether the task should be split
 
 When asking: cite spec section/line, current code path, and what specifically you can't reconcile.
+
+---
+
+## Design Context
+
+UI/视觉改动前先读根目录 [`PRODUCT.md`](PRODUCT.md)(设计定位、品牌人格、反向参考)与 [`DESIGN.md`](DESIGN.md)(视觉系统,如存在)。UI 结构性内容(路由、布局、交互)以 spec §9 为准;PRODUCT.md/DESIGN.md 负责"长什么样、什么气质"。
+
+---
+
+## UI Development Workflow (superpowers × impeccable)
+
+Two skill systems run on this repo. They are **not competitors — they are different layers**:
+
+- **superpowers** = the process spine for *all* work (brainstorming → writing-plans → subagent-driven-development → requesting-code-review → finishing-branch). Decides *what* to build and gets it safely merged.
+- **impeccable** = a specialist for the *visual/design phase only* (`craft`, `live`, `document`). Invents visual language and folds it into `DESIGN.md`. It is **not** an engineering-process tool and does **not** replace superpowers discipline.
+
+**They never both "drive" the same task.** Routing is decided at `writing-plans` time, per task:
+
+- 🔧 **Derivative or logic** — reuses patterns already in `DESIGN.md`, or is pure logic → **pure superpowers**. impeccable is irrelevant.
+- 🎨 **Net-new visual** — a surface `DESIGN.md` doesn't yet cover → superpowers builds it functional first, impeccable polishes it later.
+
+As `DESIGN.md` matures, the share of 🎨 tasks shrinks toward zero. That convergence is an *outcome*, not a starting assumption.
+
+### Sequencing within a milestone
+
+1. `brainstorming` + `writing-plans` — tag every task 🔧 / 🎨.
+2. **(exception) spike-first** — only for 🎨 surfaces where *the final look dictates DOM structure*, OR *`DESIGN.md` has almost no reusable primitive for it*. Run impeccable `craft` first to settle structure/primitives, `document` into `DESIGN.md`, then build logic into it. Avoids structural rework and starves improvisation.
+3. **subagent-driven-development** — build the *whole* milestone to a functional state on a running app with real data/states. TDD the logic. (impeccable's `live` iterates best on a real running app, not mockups — so functional-first, not mockup-first.)
+4. **impeccable polish pass** — `live`-iterate the 🎨 surfaces, then `/impeccable document` to fold new tokens into `DESIGN.md`. **Do this before `requesting-code-review`** so review sees the final state (otherwise polish re-diffs already-reviewed code).
+5. `requesting-code-review` → fix → `finishing-a-development-branch` → merge.
+
+### Rules that keep the seam clean
+
+The danger in the functional pass is **not** "too plain" (plain → polished is cheap, additive). It's the **half-styled middle state** — a subagent improvising some design sense that doesn't fully meet the system. Un-picking that during polish costs more than building from a clean blank. These rules forbid that state:
+
+- **Presentation stays logic-free.** Structure components as logic-layer (hooks / server actions / state) + **dumb view** (markup fed by props). The clean boundary is the hook/view seam, **not** the task. A view with inline logic can't be polished without touching logic. *(CR checkpoint.)*
+- **Subagents compose, never invent.** In the functional pass, presentation may **only** assemble existing `DESIGN.md` tokens / primitives. **No invented visual values** — no raw hex, no magic spacing, no ad-hoc shadow/motion. Where the kit lacks a primitive, leave a **structurally-neutral shell** (correct semantics/layout, zero flourish) marked `{/* DESIGN-GAP: … */}`. Never improvise to "make it look decent."
+- **Handoff is a grep, not a guess.** The polish pass finds its targets by grepping `DESIGN-GAP` markers, not by eyeballing every screen.
+- **Mechanical guard (rule now; wire into lint/CI).** In `apps/web/components`, never use raw hex, Tailwind arbitrary-value brackets (`p-[13px]`, `bg-[#abc]`), or inline `style=`. Everything goes through tokens. Add a lint/CI check so "no improvisation" is enforced, not aspirational.
+
+> Net: don't rely on subagents *restraining* their taste — make improvisation impossible (closed vocabulary + lint). Where the token kit is too thin to compose from, spike-first to fill it before the functional pass.

@@ -54,6 +54,32 @@ export async function listFeed(opts: {
   return rows.map((r) => ({ ...r, bookmarked: r.bookmarked ?? false }));
 }
 
+export interface TodayStats {
+  addedToday: number;
+  doneToday: number;
+  inFlight: number;
+  failed: number;
+}
+
+// Single-pass aggregate for the context rail. "Today" is the DB server's day
+// boundary — good enough for a single-user deployment where app and DB share a box.
+export async function getTodayStats(): Promise<TodayStats> {
+  const db = getDbClient();
+  const rows = await db
+    .select({
+      addedToday: sql<number>`count(*) FILTER (WHERE ${items.ingestedAt} >= date_trunc('day', now()))::int`,
+      // "done today" keys off updatedAt because completeStage is the last writer of
+      // updatedAt on the happy path. If a future feature mutates updatedAt after an
+      // item is done (e.g. bookmarking), this would over-count — add a dedicated
+      // done_at column then rather than reusing updatedAt.
+      doneToday: sql<number>`count(*) FILTER (WHERE ${items.state} = 'done' AND ${items.updatedAt} >= date_trunc('day', now()))::int`,
+      inFlight: sql<number>`count(*) FILTER (WHERE ${items.state} NOT IN ('done', 'failed'))::int`,
+      failed: sql<number>`count(*) FILTER (WHERE ${items.state} = 'failed')::int`,
+    })
+    .from(items);
+  return rows[0] ?? { addedToday: 0, doneToday: 0, inFlight: 0, failed: 0 };
+}
+
 export async function getSourceName(id: string): Promise<string | null> {
   const db = getDbClient();
   const rows = await db.select({ name: sources.name }).from(sources).where(eq(sources.id, id)).limit(1);
