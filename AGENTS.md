@@ -48,7 +48,7 @@ docs/
 **Where to put new code**:
 - Pure business logic (a new pipeline stage, a new search ranking strategy) → `packages/core/src/{pipeline,search,...}`
 - New REST/Server Action endpoint → `apps/web/app/api/...` (thin layer that calls into `@benkyou/core`)
-- New background job handler → register in `apps/worker/src/loop.ts` + handler in `packages/core/src/pipeline/`
+- New background job handler → register in BOTH `packages/core/src/queue/{loop,batch}.ts` dispatchers + handler in `packages/core/src/pipeline/`
 - New React component → `apps/web/components/` (or co-located in route folder if single-use)
 
 **Where NOT to put code**:
