@@ -28,21 +28,48 @@ multi-tenant or per-user artifact (single-user invariant unchanged).
 
 ---
 
+## Prerequisite — timed transcript contract (upstream delta to M2a/M2b)
+
+v1's `timestamp-link` block and the phase-2 `speech-density` heuristic both assume the transcript
+carries **per-segment timing**. Today that is not guaranteed: M2a commits only to `raw_content`
+(flattened text), and M2b's spec stores `transcript_segments` **only when diarization is present**.
+
+**Contract (add to M2a + M2b):** every transcript path populates the existing
+`items.transcript_segments` jsonb as a **timed** array — `[{ start, end, text, speaker? }]`:
+- **M2a subtitle adapters** parse cue timing (SRT/VTT cues already carry start/end) into segments,
+  *in addition to* the flattened `raw_content` used for search/embedding. `speaker` only if the
+  platform provides it.
+- **M2b Whisper** always stores segments with timing (not only under diarization); `speaker` only
+  when diarized.
+
+Without this, v1 still works but **degrades to a no-timestamp text article** (no jump-links, weaker
+structure). Because it touches M2a/M2b — *earlier* milestones, being designed on this very branch —
+it is flagged now to avoid a backfill later (recorded in "Spec deltas").
+
+---
+
 ## Core decisions (locked in brainstorm)
 
 1. **Trigger = on-demand, independent subsystem.** A "生成图文稿" action on the video detail page
-   runs a background job that **never touches `items.state`, `runner.ts`, or the pipeline
-   dispatchers**. Cost is incurred only when the user asks. This isolates blast radius and matches
-   the editable nature (a user who edits is actively studying that one video).
+   enqueues a background job that is **not** in `PER_ITEM_STAGES` and **never touches `items.state`
+   or the `runner.ts` state machine**. It is, however, an **independent pg-boss queue that must be
+   registered/consumed in both runtime modes** (docker worker loop + serverless `processBatch`) — a
+   non-pipeline queue still needs a consumer in each mode (see Phase 1). Cost is incurred only when
+   the user asks. This isolates blast radius and matches the editable nature (a user who edits is
+   actively studying that one video).
 2. **Image strategy = hybrid.** A few **real key screenshots** for genuine value-frames
    (code / diagram / slide change) + **timestamp/range deep-links** for everything else
    (`?t=` on YouTube/Bilibili). Not every frame is stored.
-3. **Two block types over the video timeline:**
-   - *Narrative* — transcript-driven prose, with the occasional key frame.
-   - *Operation-segment* — for "presenter operating, low speech, content lives on screen" spans:
-     detected, then narrated as a **numbered step list / step-timeline** with a denser frame
-     sample + a range jump-link. A linear operation sequence is faithfully a step list, **not** a
-     flowchart.
+3. **Block types over the video timeline:**
+   - *Narrative* (v1) — transcript-driven prose, with the occasional key frame (frames are v2).
+   - *Step list* (v1) — when the **transcript itself** enumerates a sequence ("first… then…"),
+     emit a numbered step list with `timestamp` / `timestamp-range` links. Pure text — no frames,
+     no detection.
+   - *Operation-segment* (**v2 only**) — for "presenter operating, low speech, content lives on
+     screen" spans the transcript can't carry: detected via low speech-density + high visual-change,
+     then narrated from a **denser frame sample** + range jump-link. A linear operation is a step
+     list, **not** a flowchart. Detection needs ffmpeg visual-change, so it **cannot** exist in the
+     text-only v1; v1's step lists come only from explicit transcript cues.
    - *Mermaid flowchart = stretch goal, explicitly deferred.* It is an **orthogonal** capability
      (suits branching/structural explanation — algorithm / architecture / decision flow — which
      can occur in any content type), not the answer to the operation-segment case. Multimodal-
@@ -57,6 +84,12 @@ multi-tenant or per-user artifact (single-user invariant unchanged).
    retrieval — `raw_content` remains the retrieval substrate. Otherwise a user edit would force
    re-embed + re-score, dragging the just-isolated artifact back into the pipeline and creating a
    "content changed after done" inconsistency window. The article is for human reading.
+   **Hard boundary:** article generation / edit / regenerate must **not** write any
+   retrieval-relevant `items.*` column — not `raw_content`, `summary`, `deep_summary`,
+   `topic_tags`, `depth_score`, `topic_score`, or `category` — and the article must **not** be read
+   by Agent tools (M4 `get_item_detail`, etc.). It lives **only** in `item_articles` /
+   `article_assets`, so it cannot leak into `search_vec` (generated from title+summary+raw_content)
+   or into the agent's context.
 6. **Multimodal missing = graceful degrade.** No multimodal endpoint configured → still produce a
    clean text article (transcript-driven + timestamp links), just without smart screenshots /
    operation-segment frames. Visual features are gated in the UI with a clear "needs a multimodal
@@ -67,18 +100,26 @@ multi-tenant or per-user artifact (single-user invariant unchanged).
    the visual layer anyway (see 10). Final backend chosen at the phase-2 plan.
 8. **Edit / regenerate.** The article is stored and user-editable. Regenerate is an **explicit**
    action that **warns before overwriting** edits. No version history in v1.
-9. **Per-type adaptation = prompt templates keyed off `videoKind`** (free-text column already in
-   `items`; conventional values per spec §9.3: `auto / interview / tutorial / talk / other`; M3
-   already branches on it for scoring). The block vocabulary is shared; templates vary which
-   blocks / tone / density. The three target scenarios map onto the **existing** convention:
-   **technical tutorial → `tutorial`**, **multi-person podcast → `interview`**, **tech news →
-   `other`** (or add a dedicated `news`/`资讯` value — see deltas; it is free-text, so no
-   migration). Interview/podcast quality depends on **diarization** (subtitle speaker tags or a
-   Deepgram-style endpoint, per spec §6.2 / README recommendation).
+9. **Per-type adaptation = prompt templates keyed off two existing axes.** `videoKind` is the
+   video's **form** (free-text column in `items`; conventional values per spec §9.3:
+   `auto / interview / tutorial / talk / other`; M3 already branches on it for scoring). The block
+   vocabulary is shared; templates vary which blocks / tone / density. The three target scenarios
+   map as: **technical tutorial → `videoKind='tutorial'`**, **multi-person podcast →
+   `videoKind='interview'`**, **tech news → `category='news'`** (usually with `videoKind='other'`).
+   `news`/`资讯` is a **content class** that already lives on the separate `items.category` axis
+   (set by the M3 score branch) — so the news template is selected by `category`, **not** by adding
+   a value to `video_kind`; this keeps video *form* and content *class* from mixing.
+   Interview/podcast quality depends on **diarization** (subtitle speaker tags or a Deepgram-style
+   endpoint, per spec §6.2 / README recommendation).
 10. **Serverless boundary.** The **visual layer is unsupported on serverless** — same reasoning as
     transcription (spec §11.2): ffmpeg + blob handling do not fit a 10s budget; a half-finished,
-    killed-then-retried job means repeated cost. The **text layer (LLM-only) does work** on
-    serverless.
+    killed-then-retried job means repeated cost. The **text layer (LLM-only) works on serverless
+    only within budget**: the serverless worker is the `/api/cron/work` batch model, so a
+    long-transcript generation can itself overrun the function budget and replay the same
+    timeout → retry → repeat-cost failure. Rule: attempt only when the transcript fits a token/time
+    budget; over budget → **fail fast or emit a truncated article**, with **no long-task retry**
+    (low max attempts). (Simpler alternative, if we'd rather not maintain a budget estimate: gate
+    text-layer generation off on serverless entirely, like transcription.)
 
 ---
 
@@ -90,7 +131,7 @@ multi-tenant or per-user artifact (single-user invariant unchanged).
 | Media fetch + ffmpeg frame extraction | **Med**, mostly **shared with M2b** | M2b already "fetch media + ffmpeg-extract audio". Frames = same substrate, different filter. |
 | Blob storage (hybrid → few images) | **Low** | `bytea` or local volume; S3 only for serverless (which doesn't run this). |
 | Multimodal frame selection + operation-segment narration | **Med–High** | The real algorithmic/quality work: scene-change candidates → multimodal "informative? + caption"; operation-segment heuristic + step narration. Needs tuning. |
-| Per-type adaptation (tutorial / podcast / news) | **Low** | Prompt templates off `videoKind`. Shared block vocabulary. |
+| Per-type adaptation (tutorial / podcast / news) | **Low** | Prompt templates off `videoKind` form (+ `category='news'` for news). Shared block vocabulary. |
 | Edit / regenerate semantics | **Low–Med** | Cheap **because** it stays out of the retrieval path. |
 
 **Cost inversion to remember:** "few screenshots + links" is cheap *because* multimodal calls are
@@ -117,23 +158,28 @@ conversion frame budget** and an operation-segment frame-density ceiling.
     updated_at    timestamptz not null default now()
     unique (item_id)                                   -- one article per item (regenerate overwrites)
   ```
-- **Block vocabulary (typed, jsonb):** `heading`, `paragraph`, `code`, `quote`, `list`,
-  `timestamp-link` (label + seconds), `operation-segment` (range + steps[] + links; frames added in
-  phase 2), `image` (phase 2; `article_assets` ref). Phase 1 emits everything except `image`.
-- **On-demand job:** a pg-boss queue `generate-article:item_id` (used purely as a job runner) →
-  writes `item_articles.status` → **never** writes `items.state`. Long-running multimodal work
-  belongs off the request path, but it is **not** a pipeline stage and is exempt from the §6.1
-  state guard.
-- **Per-type templates** keyed off `videoKind` (conventional values §9.3: `auto / interview /
-  tutorial / talk / other`; scenarios map tutorial→`tutorial`, podcast→`interview`,
-  tech-news→`other` or an added `news` value).
+- **Block vocabulary (typed, jsonb):** `heading`, `paragraph`, `code`, `quote`, `list` (incl.
+  numbered step lists), `timestamp-link` (label + seconds), `timestamp-range` (start + end). **v1
+  emits these.** `operation-segment` (detection + denser frames + range narration) and `image`
+  (`article_assets` ref) are **v2 only** — v1 never emits them (operation-segment needs ffmpeg
+  visual-change detection; see decision 3).
+- **On-demand job:** an **independent pg-boss queue** `generate-article` (item id in the payload),
+  **registered and consumed in both runtime modes** — the docker worker loop **and** the serverless
+  `processBatch` — but **not** part of `PER_ITEM_STAGES` / `runner.ts`. It writes
+  `item_articles.status`, **never** `items.state`, and is exempt from the §6.1 at-least-once state
+  guard (which governs only pipeline stages). "Not a pipeline stage" ≠ "no dispatcher wiring": a
+  non-pipeline queue still needs a consumer registered in each mode.
+- **Per-type templates** keyed off the `videoKind` **form** (`auto / interview / tutorial / talk /
+  other`) plus `category`; the **news/资讯 template derives from `category='news'`** (separate
+  axis), not from a `video_kind` value (see decision 9).
 - **Editor:** block-based reader + edit mode on the detail page. Net-new visual surface — mark
   `{/* DESIGN-GAP: article reader/editor */}` in the functional pass; impeccable polish later
   (per the superpowers×impeccable workflow in AGENTS.md).
 - **Metering:** generation records `ai_usage` (`kind='llm'`, a new `stage='article'`). Phase 1 is
-  LLM-only, so it fits the existing `ai_usage` shape — **no schema dependency on M2b** for the text
-  layer.
-- **Serverless:** supported (LLM-only).
+  LLM-only, so it fits the existing `ai_usage` shape — **no `ai_usage`-schema dependency on M2b**.
+  (The text layer's one upstream dependency is the timed-transcript contract above, not a schema.)
+- **Serverless:** supported (LLM-only) **only within a token/time budget** (decision 10);
+  over-budget transcripts fail fast / truncate, no long retry.
 
 ## Phase 2 — Visual enrichment layer (v2, gated behind M2b + multimodal)
 
@@ -158,6 +204,11 @@ conversion frame budget** and an operation-segment frame-density ceiling.
 (Recorded here, not edited inline, to avoid colliding with the in-flight §15 M2a/M2b split on the
 `m2a-brainstorm` branch — same convention as `m2a-design.md`. Land these when each phase is scheduled.)
 
+- **M2a + M2b (timed transcript contract):** both transcript paths must populate
+  `items.transcript_segments` as a timed `[{ start, end, text, speaker? }]` array — M2a from
+  subtitle cue timing, M2b always (not only under diarization). Prerequisite for v1 jump-links and
+  the phase-2 speech-density heuristic (see Prerequisite section). **Expands M2a/M2b scope — fold
+  into the M2a design now**, since those milestones land first.
 - **§3.2 (v2):** reshape 「教学视频画面识别(关键帧 OCR + 多模态 LLM)」 → "video → illustrated
   article: visual enrichment layer (key screenshots + operation-segment narration via multimodal
   LLM)". OCR is **subsumed** by multimodal captioning; drop the standalone OCR framing.
@@ -169,9 +220,9 @@ conversion frame budget** and an operation-segment frame-density ceiling.
   phase lands.
 - **§11.2 (serverless):** add the visual layer to the list of serverless-unsupported capabilities
   (alongside no-subtitle transcription), with the text layer noted as supported.
-- **§9.3 + M3 score branch (optional):** if a distinct *tech-news / 资讯* template is wanted, add a
-  `news` value to the `video_kind` convention (free-text column → no migration) and to the §9.3
-  type dropdown + M3's per-type branch. Otherwise tech-news maps to `other`.
+- **§9.3 / template selection:** the tech-news/资讯 template is selected from `items.category='news'`
+  (existing axis from the M3 score branch) combined with `video_kind` — **not** by adding `news` to
+  `video_kind` (that would mix video *form* with content *class*). No schema change.
 
 ---
 
