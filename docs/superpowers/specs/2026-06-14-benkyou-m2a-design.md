@@ -70,6 +70,10 @@ type TranscriptStatus =
   | 'na' | 'pending' | 'present'
   | 'skipped_too_long' | 'skipped_serverless' | 'unavailable';
 
+// timed transcript contract (see §6 deltas + video-article-design.md): subtitles/Whisper
+// emit timed segments; speaker is optional (only when the platform/endpoint provides it).
+interface TranscriptSegment { start: number; end: number; text: string; speaker?: string }
+
 interface ExtractInput {
   url: string;
   rawContent: string | null;
@@ -82,6 +86,7 @@ interface ExtractResult {
   rawContent: string | null;
   contentType: 'article' | 'video' | 'discussion' | 'paper';
   transcriptStatus?: TranscriptStatus; // video adapters set this; default 'na'
+  transcriptSegments?: TranscriptSegment[] | null; // timed cues → items.transcript_segments
   videoDuration?: number | null;
   videoKind?: string | null;           // M2a leaves default; M3 score branch classifies
 }
@@ -94,7 +99,8 @@ interface SourceAdapter {
 ```
 
 - `pipeline/extract.ts` becomes a pure dispatcher: `resolveAdapter(item) → adapter.extract(input)
-  → write columns`. The current Readability path moves into the article/RSS adapter's `extract()`.
+  → write columns` (incl. `transcript_segments`). The current Readability path moves into the
+  article/RSS adapter's `extract()`.
 - **Adapter resolution:** auto source (`source_id` set) → by `source.type`. Adhoc paste
   (`source_id IS NULL`) → detect by URL host (`youtube.com`/`youtu.be` → youtube;
   `bilibili.com` → bilibili; else → article).
@@ -105,10 +111,16 @@ adapter interface — no state-machine change.
 ## 2. Subtitle adapters + degradation contract
 
 - YouTube / Bilibili `extract()`: fetch subtitles → present →
-  `{ rawContent: subtitle, contentType: 'video', transcriptStatus: 'present', videoDuration }`;
-  absent (or Bilibili login-required) →
-  `{ rawContent: null, contentType: 'video', transcriptStatus: 'unavailable', videoDuration }`,
-  pipeline continues.
+  `{ rawContent: subtitle, transcriptSegments: cues, contentType: 'video',
+  transcriptStatus: 'present', videoDuration }` — where `cues` are the timed subtitle cues mapped
+  to `[{ start, end, text, speaker? }]` (`speaker` only if the platform provides it); absent (or
+  Bilibili login-required) →
+  `{ rawContent: null, transcriptSegments: null, contentType: 'video',
+  transcriptStatus: 'unavailable', videoDuration }`, pipeline continues.
+- **Timed transcript contract:** subtitles already carry per-cue timing, so the adapter populates
+  `transcript_segments` (not only the flattened `rawContent`). Required by the video→article
+  feature for jump-links / speech-density; it **redefines** `transcript_segments` semantics (see
+  §6 deltas). M2b's Whisper path must do the same (always timed; speaker only when diarized).
 - **Degradation contract:** any subtitle-fetch exception is caught and mapped to `'unavailable'`
   + continue. An adapter **never throws to fail the item** — scrape sources are fragile and a
   missing/blocked subtitle is normal, not a pipeline error. (Contrast: a genuine transient like a
@@ -169,6 +181,12 @@ with no consumer.
 - **§15:** split the M2 row into **M2a** and **M2b** (done in this branch).
 - **§6.2:** note Bilibili's M2a scope (login-free subtitles) and the "fetch failure →
   `unavailable` + continue, never fail the item" degradation contract.
+- **§5.3 + §6.2 (`transcript_segments` semantics):** redefine `transcript_segments` from
+  「视频说话人分段(如果可用)」(§5.3 line 266) to **「timed transcript segments
+  `[{ start, end, text, speaker? }]`; speaker optional」**, and amend §6.2's transcribe note (line
+  469, "only when speaker labels") so M2b **always** writes timed segments (speaker only when
+  diarized). Driven by the video→article timed-transcript contract; M2a's subtitle adapters are the
+  first writer.
 - **Milestone-sequencing note:** M2a's no-subtitle video → temporary `unavailable`; M2b routes it
   to `transcribe`. No backfill of M2a-era items.
 
@@ -178,8 +196,9 @@ boundary, and the embedding-dimension invariant are all unchanged and remain aut
 ## 7. Testing (TDD targets)
 
 - Adapter dispatch routing: by `source.type` for auto sources, by URL host for adhoc.
-- Subtitle adapter: present → `present` + rawContent; absent → `unavailable` + continue;
-  exception → `unavailable` (never throws to fail the item).
+- Subtitle adapter: present → `present` + rawContent **+ timed `transcript_segments`** (cues mapped
+  to `{start,end,text,speaker?}`); absent → `unavailable` + continue (segments null); exception →
+  `unavailable` (never throws to fail the item).
 - Paste: duplicate URL → `existing`; new URL → `created` + enqueued.
 - `consecutive_failures`: increments on fetch failure, resets on success.
 - `getPipelineHealth()` aggregation across the three signals.

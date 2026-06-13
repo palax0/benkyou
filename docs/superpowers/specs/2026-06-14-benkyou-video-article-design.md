@@ -113,13 +113,12 @@ it is flagged now to avoid a backfill later (recorded in "Spec deltas").
    endpoint, per spec §6.2 / README recommendation).
 10. **Serverless boundary.** The **visual layer is unsupported on serverless** — same reasoning as
     transcription (spec §11.2): ffmpeg + blob handling do not fit a 10s budget; a half-finished,
-    killed-then-retried job means repeated cost. The **text layer (LLM-only) works on serverless
-    only within budget**: the serverless worker is the `/api/cron/work` batch model, so a
-    long-transcript generation can itself overrun the function budget and replay the same
-    timeout → retry → repeat-cost failure. Rule: attempt only when the transcript fits a token/time
-    budget; over budget → **fail fast or emit a truncated article**, with **no long-task retry**
-    (low max attempts). (Simpler alternative, if we'd rather not maintain a budget estimate: gate
-    text-layer generation off on serverless entirely, like transcription.)
+    killed-then-retried job means repeated cost. The **text layer (LLM-only) works on serverless**,
+    but is **budget-gated**: the serverless worker is the `/api/cron/work` batch model, so a
+    long-transcript generation can overrun the function budget and replay the same
+    timeout → retry → repeat-cost failure. **Locked rule:** estimate the token/time budget first;
+    within budget → full article; over budget → emit a **truncated article (clearly marked as
+    budget-truncated)**; **never a long-task retry** (low max attempts).
 
 ---
 
@@ -178,8 +177,8 @@ conversion frame budget** and an operation-segment frame-density ceiling.
 - **Metering:** generation records `ai_usage` (`kind='llm'`, a new `stage='article'`). Phase 1 is
   LLM-only, so it fits the existing `ai_usage` shape — **no `ai_usage`-schema dependency on M2b**.
   (The text layer's one upstream dependency is the timed-transcript contract above, not a schema.)
-- **Serverless:** supported (LLM-only) **only within a token/time budget** (decision 10);
-  over-budget transcripts fail fast / truncate, no long retry.
+- **Serverless:** supported (LLM-only), **budget-gated** (decision 10): estimate budget first →
+  full article within budget; over budget → **truncated (marked) article**; no long retry.
 
 ## Phase 2 — Visual enrichment layer (v2, gated behind M2b + multimodal)
 
@@ -204,11 +203,13 @@ conversion frame budget** and an operation-segment frame-density ceiling.
 (Recorded here, not edited inline, to avoid colliding with the in-flight §15 M2a/M2b split on the
 `m2a-brainstorm` branch — same convention as `m2a-design.md`. Land these when each phase is scheduled.)
 
-- **M2a + M2b (timed transcript contract):** both transcript paths must populate
-  `items.transcript_segments` as a timed `[{ start, end, text, speaker? }]` array — M2a from
-  subtitle cue timing, M2b always (not only under diarization). Prerequisite for v1 jump-links and
-  the phase-2 speech-density heuristic (see Prerequisite section). **Expands M2a/M2b scope — fold
-  into the M2a design now**, since those milestones land first.
+- **M2a + M2b (timed transcript contract):** both transcript paths populate
+  `items.transcript_segments` as a **timed** `[{ start, end, text, speaker? }]` array — M2a from
+  subtitle cue timing, M2b always (not only under diarization). **Now folded into `m2a-design.md`**
+  (ExtractResult + subtitle adapter + a §5.3/§6.2 semantics delta there). This **rewrites the
+  main-spec wording**: §5.3 line 266 (「说话人分段(如果可用)」) and §6.2 line 469 (segments only
+  with speaker labels) → **「timed segments; speaker optional」**. Prerequisite for v1 jump-links +
+  phase-2 speech-density.
 - **§3.2 (v2):** reshape 「教学视频画面识别(关键帧 OCR + 多模态 LLM)」 → "video → illustrated
   article: visual enrichment layer (key screenshots + operation-segment narration via multimodal
   LLM)". OCR is **subsumed** by multimodal captioning; drop the standalone OCR framing.
