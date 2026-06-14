@@ -170,6 +170,12 @@
     "driftOk": "✓ 维度一致（{dim}）",
     "driftWarn": "⚠ 维度不一致：env={env} / 列={col} / 设置={set}。列维度为准（迁移时冻结），embed 阶段会失败直到模型输出维度等于列维度。"
   },
+  "banner": {
+    "failingSources": "{n} 个订阅源连续抓取失败",
+    "failedItems": "{n} 条内容处理失败",
+    "orphans": "{n} 条任务疑似丢失",
+    "cta": "查看"
+  },
   "shell": {
     "skipToContent": "跳到正文",
     "mainNav": "主导航",

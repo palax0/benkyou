@@ -170,6 +170,12 @@
     "driftOk": "✓ Dimensions consistent ({dim})",
     "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim."
   },
+  "banner": {
+    "failingSources": "{n} source(s) failing to fetch",
+    "failedItems": "{n} item(s) failed to process",
+    "orphans": "{n} task(s) appear lost",
+    "cta": "View"
+  },
   "shell": {
     "skipToContent": "Skip to content",
     "mainNav": "Main navigation",
