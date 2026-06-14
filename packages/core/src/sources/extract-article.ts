@@ -25,22 +25,69 @@ export async function fetchReadable(url: string): Promise<FetchOutcome> {
   return { ok: true, markdown };
 }
 
+// Below this many chars of PLAIN TEXT (stripMarkdown of the candidate, so link URLs /
+// markup don't inflate the count) we assume only a blurb and try the next stage.
+const FULLTEXT_MIN_CHARS = 600;
+
+// Pick the most user-meaningful failure when several stages fail (design §5.2 step 4).
+const FAIL_PRIORITY: Record<FetchFailReason, number> = { blocked: 3, empty_parse: 2, fetch_failed: 1 };
+
+export interface ResolvedContent {
+  contentMd: string | null;
+  rawContent: string | null;
+  extractStatus: ExtractStatus;
+}
+
+function plainLen(md: string): number {
+  return stripMarkdown(md).length;
+}
+
 export async function resolveContent(
-  rawContent: string | null,
+  feedHtml: string | null,
   url: string | null,
-): Promise<string> {
-  let content = htmlToText(rawContent ?? '');
-  if (content.length < FULLTEXT_MIN_CHARS && url) {
-    const fetched = await fetchReadable(url);
-    if (fetched && fetched.length > content.length) content = fetched;
+  reader?: { baseUrl: string; apiKey?: string },
+): Promise<ResolvedContent> {
+  let best = feedHtml ? htmlToMarkdown(feedHtml) : ''; // markdown is the canonical form
+  let succeeded = plainLen(best) >= FULLTEXT_MIN_CHARS; // adequate feed alone counts as ok
+  let lastFail: FetchFailReason | null = null;
+  const mergeFail = (r: FetchFailReason) => {
+    if (!lastFail || FAIL_PRIORITY[r] > FAIL_PRIORITY[lastFail]) lastFail = r;
+  };
+  const consider = (md: string) => {
+    if (plainLen(md) > plainLen(best)) best = md;
+    succeeded = true;
+  };
+
+  // Stage 2: direct fetch. Trigger when best is below threshold (NOT "best empty") — a
+  // 200-char feed blurb must still escalate (design §5.2 step 3 note).
+  if (plainLen(best) < FULLTEXT_MIN_CHARS && url) {
+    const outcome = await fetchReadable(url);
+    if (outcome.ok) consider(outcome.markdown);
+    else mergeFail(outcome.reason);
   }
-  return content;
+
+  // Stage 3: reader fallback — only if still below threshold (or prior stage failed) AND configured.
+  if (plainLen(best) < FULLTEXT_MIN_CHARS && reader?.baseUrl && url) {
+    const outcome = await fetchViaReader(url, reader);
+    if (outcome.ok) consider(outcome.markdown);
+    else mergeFail(outcome.reason);
+  }
+
+  const extractStatus: ExtractStatus = succeeded ? 'ok' : (lastFail ?? 'ok');
+  const md = best.length > 0 ? best : null;
+  return { contentMd: md, rawContent: md ? stripMarkdown(md) : null, extractStatus };
 }
 
 export async function extractArticle(input: ExtractInput): Promise<ExtractResult> {
-  const content = await resolveContent(input.rawContent, input.url);
+  const { contentMd, rawContent, extractStatus } = await resolveContent(
+    input.rawContent,
+    input.url || null,
+    input.reader,
+  );
   return {
-    rawContent: content.length > 0 ? content : null,
+    rawContent,
+    contentMd,
+    extractStatus,
     contentType: 'article',
     transcriptStatus: 'na',
   };

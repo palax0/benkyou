@@ -98,9 +98,16 @@ function shouldSkipItem(item: EstimateRawItem, existing: ExistingRssItemKeys | u
   return item.externalId !== null && existing.sourceExternalIds.has(item.externalId);
 }
 
+// Adapt the FetchOutcome-returning fetchReadable to the string|null shape expected
+// by this estimator tool. Estimator only needs the text; failure reason is irrelevant here.
+async function fetchReadableAsText(url: string): Promise<string | null> {
+  const outcome = await fetchReadable(url);
+  return outcome.ok ? outcome.markdown : null;
+}
+
 export async function estimateRssEmbeddingCost(options: EstimateRssEmbeddingCostOptions): Promise<RssEmbeddingEstimate> {
   const hashUrl = options.hashUrl ?? urlHash;
-  const fetcher = options.fetchReadable ?? fetchReadable;
+  const fetcher = options.fetchReadable ?? fetchReadableAsText;
   const candidateItems = options.items.filter((item) => !shouldSkipItem(item, options.existing, hashUrl));
 
   let readableFetched = 0;
