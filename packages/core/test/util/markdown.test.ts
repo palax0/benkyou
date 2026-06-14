@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { htmlToMarkdown } from '../../src/util/markdown.js';
+import { htmlToMarkdown, stripMarkdown } from '../../src/util/markdown.js';
 
 describe('htmlToMarkdown', () => {
   test('converts headings, paragraphs, and code blocks to markdown', () => {
@@ -18,5 +18,27 @@ describe('htmlToMarkdown', () => {
   test('empty / whitespace input yields empty string', () => {
     expect(htmlToMarkdown('')).toBe('');
     expect(htmlToMarkdown('   ')).toBe('');
+  });
+});
+
+describe('stripMarkdown', () => {
+  test('drops heading markers, keeps heading text', () => {
+    expect(stripMarkdown('## Real Title\n\nbody')).toBe('Real Title\n\nbody');
+  });
+
+  test('drops code fences but keeps the code content', () => {
+    const md = '```ts\nconst x = 1;\n```';
+    const out = stripMarkdown(md);
+    expect(out).toContain('const x = 1;');
+    expect(out).not.toContain('```');
+  });
+
+  test('reduces links to their text', () => {
+    expect(stripMarkdown('see [the docs](https://e.test/very/long/url)')).toBe('see the docs');
+  });
+
+  test('strips emphasis, list markers, blockquotes, inline code', () => {
+    expect(stripMarkdown('- **bold** and `code`')).toBe('bold and code');
+    expect(stripMarkdown('> quoted line')).toBe('quoted line');
   });
 });
