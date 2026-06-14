@@ -80,6 +80,14 @@
     "processingTitle": "正在处理…",
     "processingStage": "当前阶段：{stage}",
     "processingFailed": "在 {stage} 阶段失败",
+    "extractMissing": "正文未抓取({reason})",
+    "extractPartial": "正文可能不完整({reason})",
+    "summaryTitleOnly": "仅据标题",
+    "extractReason": {
+      "blocked": "被站点拦截",
+      "fetch_failed": "抓取失败",
+      "empty_parse": "无可读正文"
+    },
     "transcript": {
       "present": "字幕",
       "unavailable": "无字幕",

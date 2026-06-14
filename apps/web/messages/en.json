@@ -80,6 +80,14 @@
     "processingTitle": "Processing…",
     "processingStage": "Current stage: {stage}",
     "processingFailed": "Failed at {stage}",
+    "extractMissing": "Full text not fetched ({reason})",
+    "extractPartial": "Full text may be incomplete ({reason})",
+    "summaryTitleOnly": "From title only",
+    "extractReason": {
+      "blocked": "blocked by the site",
+      "fetch_failed": "fetch failed",
+      "empty_parse": "no readable content"
+    },
     "transcript": {
       "present": "Subtitles",
       "unavailable": "No subtitles",

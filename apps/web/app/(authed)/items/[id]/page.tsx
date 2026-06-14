@@ -5,6 +5,7 @@ import { DeepSummary } from '@/components/DeepSummary';
 import { AutoRefresh } from '@/components/AutoRefresh';
 import { TranscriptBadge } from '@/components/TranscriptBadge';
 import { ArticleBody } from '@/components/ArticleBody';
+import { ExtractNotice, SummaryBasisBadge } from '@/components/ExtractNotice';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -60,9 +61,24 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             <TranscriptBadge status={item.transcriptStatus} />
           </div>
         ) : null}
+        <div className="mt-2">
+          <ExtractNotice
+            contentType={item.contentType}
+            extractStatus={item.extractStatus}
+            hasContentMd={Boolean(item.contentMd)}
+            url={item.url}
+          />
+        </div>
       </header>
 
-      <DeepSummary itemId={item.id} initial={item.deepSummary} />
+      <div className="flex flex-col gap-2">
+        <SummaryBasisBadge
+          contentType={item.contentType}
+          extractStatus={item.extractStatus}
+          hasContentMd={Boolean(item.contentMd)}
+        />
+        <DeepSummary itemId={item.id} initial={item.deepSummary} />
+      </div>
 
       <ArticleBody contentMd={item.contentMd} rawContent={item.rawContent} emptyLabel={t('noContent')} />
     </main>
