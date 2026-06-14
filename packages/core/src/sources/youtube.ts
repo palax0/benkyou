@@ -1,5 +1,6 @@
 import type { ExtractInput, ExtractResult, SourceAdapter, TranscriptSegment } from './types';
 import { TransientFetchError } from './types';
+import { Innertube } from 'youtubei.js';
 
 // Internal contract between the fragile network edge and the pure transform.
 // null  = definitive miss (no captions / video unavailable) → degrade to 'unavailable'.
@@ -97,8 +98,53 @@ export function createYoutubeAdapter(fetchSubtitle: FetchYoutubeSubtitle): Sourc
   };
 }
 
-// Network fetch is wired in Task 5; until then the default fetcher reports "no
-// captions" so the adapter is registrable and integration paths degrade cleanly.
-const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async () => null;
+let innertube: Promise<Innertube> | null = null;
+function getInnertube(): Promise<Innertube> {
+  // Lazy singleton: Innertube.create() does a network handshake; build it once.
+  innertube ??= Innertube.create({ retrieve_player: false });
+  return innertube;
+}
+
+const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
+  let info;
+  try {
+    const yt = await getInnertube();
+    info = await yt.getInfo(videoId);
+  } catch (err) {
+    // Network/handshake failures are transient → retry. (A private/removed video
+    // also throws here; treating it as transient costs at most pipeline_max_attempts
+    // retries before the item degrades on the dispatcher's non-transient path. We
+    // keep the simple rule rather than string-matching youtubei.js error messages.)
+    throw new TransientFetchError(err instanceof Error ? err.message : String(err));
+  }
+
+  // basic_info.duration is number | undefined per youtubei.js v17 MediaInfo types.
+  const durationSeconds = info.basic_info.duration ?? null;
+
+  let transcript;
+  try {
+    transcript = await info.getTranscript();
+  } catch {
+    // No transcript panel = definitively no captions → degrade.
+    return { durationSeconds, cues: [] };
+  }
+
+  // Shape (v17): TranscriptInfo.transcript → Transcript (content: TranscriptSearchPanel | null)
+  // → content.body → TranscriptSegmentList (initial_segments: ObservedArray<TranscriptSegment | TranscriptSectionHeader>)
+  // Both segment types share start_ms: string, end_ms: string, snippet: Text.
+  // Text.toString() returns the plain string (handles both .text and runs forms).
+  const segments = transcript.transcript.content?.body?.initial_segments ?? [];
+  const cues: RawCue[] = segments
+    .map((seg) => {
+      const text = seg.snippet.toString();
+      // start_ms / end_ms are millisecond strings in youtubei.js v17.
+      const start = Number(seg.start_ms) / 1000;
+      const end = Number(seg.end_ms) / 1000;
+      return { start, end, text };
+    })
+    .filter((c) => c.text.trim().length > 0);
+
+  return { durationSeconds, cues };
+};
 
 export const youtubeAdapter: SourceAdapter = createYoutubeAdapter(fetchYoutubeSubtitle);
