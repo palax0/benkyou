@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDbClient, items, sources } from '../db';
-import { fetchReadable } from '../pipeline/extract';
+import { fetchReadable } from '../sources/extract-article';
 import { buildEmbeddingInputs } from '../pipeline/embedding-input';
 import { rssAdapter } from '../sources/rss';
 import { urlHash } from '../util/url';
