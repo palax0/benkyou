@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
-import { fetchReadable, resolveContent } from '../../src/pipeline/extract.js';
+import { extractArticle, fetchReadable, resolveContent } from '../../src/sources/extract-article.js';
 
 const ARTICLE_HTML = `<!doctype html><html><head><title>T</title></head><body>
   <nav>menu junk</nav>
@@ -70,5 +70,24 @@ describe('resolveContent', () => {
 
   test('no content and no usable fetch yields empty string', async () => {
     expect(await resolveContent(null, null)).toBe('');
+  });
+});
+
+describe('extractArticle', () => {
+  test('returns article contentType + transcriptStatus na', async () => {
+    const fullHtml = `<p>${'Substantive feed body sentence. '.repeat(20)}</p>`;
+    const r = await extractArticle({
+      url: 'https://site.test/never-fetched',
+      rawContent: fullHtml,
+      externalId: null,
+    });
+    expect(r.contentType).toBe('article');
+    expect(r.transcriptStatus).toBe('na');
+    expect(r.rawContent).toContain('Substantive feed body');
+  });
+
+  test('null content + null url yields rawContent null (continue)', async () => {
+    const r = await extractArticle({ url: '', rawContent: null, externalId: null });
+    expect(r.rawContent).toBeNull();
   });
 });
