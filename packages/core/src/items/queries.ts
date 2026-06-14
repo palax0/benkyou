@@ -17,6 +17,8 @@ export interface FeedItem {
 
 export interface ItemDetail extends FeedItem {
   rawContent: string | null;
+  contentMd: string | null;
+  extractStatus: string;
   deepSummary: string | null;
   author: string | null;
   topicTags: string[] | null;
@@ -94,6 +96,8 @@ export async function getItemForUser(id: string): Promise<ItemDetail | null> {
     .select({
       ...FEED_COLUMNS,
       rawContent: items.rawContent,
+      contentMd: items.contentMd,
+      extractStatus: items.extractStatus,
       deepSummary: items.deepSummary,
       author: items.author,
       topicTags: items.topicTags,
