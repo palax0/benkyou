@@ -1,13 +1,37 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { getItemForUser } from '@benkyou/core/items';
+import { getItemForUser, getItemProgress } from '@benkyou/core/items';
 import { DeepSummary } from '@/components/DeepSummary';
+import { AutoRefresh } from '@/components/AutoRefresh';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await getItemForUser(id);
-  if (!item) notFound();
   const t = await getTranslations('item');
+
+  if (!item) {
+    // Not done yet (or doesn't exist) — show pipeline progress if it exists.
+    const progress = await getItemProgress(id);
+    if (!progress) notFound();
+    return (
+      <main className="flex flex-col gap-4">
+        <header className="flex items-center justify-between">
+          <h1 className="font-serif text-2xl leading-snug font-semibold text-balance text-ink">
+            {t('processingTitle')}
+          </h1>
+          <AutoRefresh />
+        </header>
+        <p className="text-sm text-muted">
+          {progress.state === 'failed'
+            ? t('processingFailed', { stage: progress.currentStage ?? '' })
+            : t('processingStage', { stage: progress.currentStage ?? progress.state })}
+        </p>
+        {progress.state === 'failed' && progress.lastError ? (
+          <pre className="whitespace-pre-wrap text-xs text-muted">{progress.lastError}</pre>
+        ) : null}
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-col gap-4">

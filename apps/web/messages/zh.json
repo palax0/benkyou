@@ -61,12 +61,27 @@
     "embedFailed": "Embedding 连接失败：{error}",
     "dimMismatch": "Embedding 维度 {got} 与固定值 {want} 不一致。若为高维模型，请勾选「请求输出维度」截断到 {want}。"
   },
+  "paste": {
+    "placeholder": "粘贴文章或视频链接…",
+    "submit": "添加",
+    "failed": "无法添加该链接",
+    "title": "添加链接"
+  },
   "item": {
     "deepSummary": "AI 深度摘要",
     "generating": "正在生成…",
     "noSummary": "暂无摘要",
     "original": "原文",
-    "noContent": "没有正文内容"
+    "noContent": "没有正文内容",
+    "processingTitle": "正在处理…",
+    "processingStage": "当前阶段：{stage}",
+    "processingFailed": "在 {stage} 阶段失败",
+    "transcript": {
+      "present": "字幕",
+      "unavailable": "无字幕",
+      "pending": "转写中",
+      "na": ""
+    }
   },
   "search": {
     "title": "搜索",

@@ -61,12 +61,27 @@
     "embedFailed": "Embedding connection failed: {error}",
     "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}."
   },
+  "paste": {
+    "placeholder": "Paste an article or video URL…",
+    "submit": "Add",
+    "failed": "Couldn't add that link",
+    "title": "Add link"
+  },
   "item": {
     "deepSummary": "AI deep summary",
     "generating": "Generating…",
     "noSummary": "No summary",
     "original": "Original",
-    "noContent": "No content"
+    "noContent": "No content",
+    "processingTitle": "Processing…",
+    "processingStage": "Current stage: {stage}",
+    "processingFailed": "Failed at {stage}",
+    "transcript": {
+      "present": "Subtitles",
+      "unavailable": "No subtitles",
+      "pending": "Transcribing",
+      "na": ""
+    }
   },
   "search": {
     "title": "Search",
