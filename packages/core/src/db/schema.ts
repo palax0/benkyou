@@ -60,6 +60,9 @@ export const userSettings = pgTable('user_settings', {
   whisperApiKey: text('whisper_api_key'),
   whisperModel: text('whisper_model'),
 
+  readerBaseUrl: text('reader_base_url'), // Jina-style reader endpoint base; NULL = reader fallback disabled
+  readerApiKey: text('reader_api_key'), // optional Bearer
+
   interestTags: text('interest_tags').array(),
   weightAlpha: numeric('weight_alpha').default('0.6'),
   weightBeta: numeric('weight_beta').default('0.3'),
@@ -128,6 +131,8 @@ export const items = pgTable(
     publishedAt: timestamp('published_at', { withTimezone: true }),
     contentType: text('content_type').notNull(),
     rawContent: text('raw_content'),
+    contentMd: text('content_md'), // markdown body for display only; NULL → UI falls back to raw_content
+    extractStatus: text('extract_status').notNull().default('ok'), // 'ok'|'blocked'|'fetch_failed'|'empty_parse' (article only)
     transcriptStatus: text('transcript_status').notNull().default('na'),
     transcriptSegments: jsonb('transcript_segments'),
     videoDuration: integer('video_duration'),
