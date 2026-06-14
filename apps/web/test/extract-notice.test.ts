@@ -8,7 +8,8 @@ describe('ExtractNotice', () => {
   test('uses the pure decision helper and links to the original', async () => {
     const src = await readFile(file, 'utf8');
     expect(src).toContain('extractNoticeState');
-    expect(src).toContain('item.original'); // reuses existing "Original" link label
+    expect(src).toContain("t('original')"); // renders the "Original" link via the shared i18n key
+    expect(src).toContain('href={url}'); // links to the source url prop
   });
 
   test('renders both missing and partial copy, and the title-only summary badge', async () => {

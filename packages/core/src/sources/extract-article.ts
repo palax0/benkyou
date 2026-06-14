@@ -66,7 +66,8 @@ export async function resolveContent(
     else mergeFail(outcome.reason);
   }
 
-  // Stage 3: reader fallback — only if still below threshold (or prior stage failed) AND configured.
+  // Stage 3: reader fallback — only if best is still below the plain-text threshold
+  // (a failed or absent prior stage leaves best unchanged, so it stays below) AND reader configured.
   if (plainLen(best) < FULLTEXT_MIN_CHARS && reader?.baseUrl && url) {
     const outcome = await fetchViaReader(url, reader);
     if (outcome.ok) consider(outcome.markdown);

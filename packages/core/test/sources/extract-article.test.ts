@@ -85,6 +85,18 @@ describe('resolveContent', () => {
     expect(r.contentMd).toContain('Short but real and complete');
   });
 
+  test('direct ok (short) + reader ok (shorter) → ok, the longer direct body wins (plain-text best-of)', async () => {
+    server.use(
+      http.get('https://site.test/short', () => new HttpResponse(
+        '<article><p>Short but real and complete article body.</p></article>', { headers: { 'content-type': 'text/html' } })),
+      http.get('https://reader.test/*', () => new HttpResponse('tiny', {})),
+    );
+    const r = await resolveContent(null, 'https://site.test/short', { baseUrl: 'https://reader.test' });
+    expect(r.extractStatus).toBe('ok');
+    expect(r.contentMd).toContain('Short but real and complete');
+    expect(r.contentMd).not.toBe('tiny'); // shorter reader candidate must not win
+  });
+
   test('direct 403, no reader, empty feed → content null, status blocked', async () => {
     server.use(http.get('https://site.test/article', () => new HttpResponse(null, { status: 403 })));
     const r = await resolveContent(null, 'https://site.test/article');
