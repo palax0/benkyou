@@ -94,6 +94,7 @@ Benkyou 是一个开源、自部署的个人 AI 资讯聚合平台，目标是**
 - 社交分享 / 评论
 - 离线模式
 - 原生移动端 app（响应式 web 已覆盖）
+- **浏览器插件**（postponed）——对受保护页面（Medium / Cloudflare / 付费墙）的"粘贴正文"入口是独立待议的 mini-spec，不在当前设计范围。**本设计对受保护页面的立场是优雅降级**：摘要 + 原文链接 + 诚实标注，而非强行抓取或绕墙。
 
 ---
 
@@ -448,7 +449,7 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的 `extract(item)`，平台特定逻辑（字幕 API、Readability、HTML 抓取）全部住在 `packages/core/src/sources/<type>.ts`——否则每加一种源都要改 pipeline，M2 的三种新源会把 extract 变成上帝函数。
 
-- **RSS**：feed 里有 `content:encoded` 全文用之；只有 description 的，fetch HTML + Mozilla Readability 提取正文
+- **RSS**：feed 里有 `content:encoded` 全文用之；只有 description 的，fetch HTML + Mozilla Readability 提取正文。文章抽取**降级 + 记录 `extract_status`**（不阻塞 pipeline）：直连/reader 任何失败 → catch、写 `extract_status`、继续——绝不 throw 让 item 进 `failed`。
 - **HN/Reddit**（v2）：调官方 JSON API 拿 story + 前 N 个评论
 - **YouTube**：先调字幕 API；有字幕直接存入 `raw_content`，并尝试解析说话人（若 API 提供）
 - **Bilibili**：调 Bilibili 字幕 API（**M2a 范围：限免登录字幕**——wbi 逐请求签名，需登录 cookie 的字幕降级为 `unavailable`，不存任何凭证；完整 cookie 支持显式不做）
@@ -460,6 +461,19 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
   - 手动粘贴 + `duration > video_auto_limit` 但 `< video_manual_limit` → 前端展示预估转写时长（音频分钟数；不折算金额，见 §5.3 ai_usage 注），用户勾选"确认转写"后才入队 `transcribe`
   - 其他情况 → 入队 `transcribe:item_id` 子任务（`transcript_status='pending'`）
 - **临时粘贴 URL**：识别是否为视频域名，分别走视频/文章路径
+
+**文章抽取详情（M2a，`resolveContent` 三段回退链）**：
+
+- **双存储正文**：`raw_content`（纯文本，由 `stripMarkdown(md)` 派生）供搜索/embedding/summary 消费，保持不动；新增 `content_md`（markdown，Jina 原生返回 / HTML 经 turndown 转换）仅供展示，`NULL` 时 UI fallback 到 `raw_content`。`search_vec` 生成列、embedding 等硬不变量全围绕 `raw_content`，零改动。
+- **`extract_status` 枚举**（与 `transcript_status` 平行，仅文章使用；视频走 `transcript_status`）：
+  - `ok` — 没有"需要的增强步骤"失败：feed 自带正文已达阈值，**或**直连/reader 成功返回（即便结果较短——合法短文也是 `ok`）
+  - `blocked` — HTTP 403 或 Cloudflare 挑战（`cf-mitigated` 等）
+  - `fetch_failed` — 网络错误 / 5xx / 抛异常
+  - `empty_parse` — 抓到页面但 Readability 解析为空（典型 SPA / 客户端渲染）
+
+  失败间优先级（`lastFail` 合并逻辑）：`blocked` > `empty_parse` > `fetch_failed`。
+- **Reader 回退契约**：`GET {reader_base_url}/{targetUrl}`，可选 `Authorization: Bearer`（Jina 约定）。`targetUrl` 保留完整 query string。仅在 `reader_base_url` 已配置 **且** 直连失败或结果不足阈值时触发，作为**最后兜底**（last resort）。不抛错：HTTP 403/挑战 → `blocked`；网络/5xx/异常 → `fetch_failed`；200 但空 → `empty_parse`。
+- **`FULLTEXT_MIN_CHARS` 阈值（600）**：判断依据为 candidate markdown 的**纯文本长度**（`stripMarkdown(md).length`），而非 markdown 字符串长度——内联链接/追踪 URL 不得虚增长度、绕过真正抓取。**注：此为对 detail design §5.2 "markdown 长度（可接受）"的明确修正，以本条为准。** 同一纯文本基准也用于多段候选间的最优选取。
 
 `transcribe` 子任务：
 - 用 ffmpeg 提音频（短视频可跳过，直接送音频 URL）
