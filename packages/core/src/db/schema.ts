@@ -148,7 +148,7 @@ export const items = pgTable(
     ingestedAt: timestamp('ingested_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     searchVec: tsvectorCol('search_vec').generatedAlwaysAs(
-      sql`setweight(to_tsvector('simple', coalesce(title,'')),'A') || setweight(to_tsvector('simple', coalesce(summary,'')),'B') || setweight(to_tsvector('simple', coalesce(raw_content,'')),'C')`,
+      sql`setweight(to_tsvector('simple', coalesce(title,'')),'A') || setweight(to_tsvector('simple', coalesce(summary,'')),'B') || setweight(to_tsvector('simple', left(coalesce(raw_content,''), 100000)),'C')`,
     ),
   },
   (t) => ({
