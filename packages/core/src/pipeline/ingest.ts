@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDbClient, items, sources } from '../db';
 import { getAdapter } from '../sources';
 import { urlHash } from '../util/url';
@@ -27,7 +27,13 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
     raw = await adapter.fetchItems(source.config as Record<string, unknown>);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db.update(sources).set({ lastFetchError: message.slice(0, 1000) }).where(eq(sources.id, source.id));
+    await db
+      .update(sources)
+      .set({
+        lastFetchError: message.slice(0, 1000),
+        consecutiveFailures: sql`${sources.consecutiveFailures} + 1`,
+      })
+      .where(eq(sources.id, source.id));
     throw err;
   }
 
@@ -58,7 +64,7 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
 
   await db
     .update(sources)
-    .set({ lastPolledAt: new Date(), lastFetchError: null })
+    .set({ lastPolledAt: new Date(), lastFetchError: null, consecutiveFailures: 0 })
     .where(eq(sources.id, source.id));
   return { fetched: raw.length, inserted };
 }

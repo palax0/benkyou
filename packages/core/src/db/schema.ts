@@ -93,6 +93,7 @@ export const sources = pgTable('sources', {
   pollInterval: integer('poll_interval').default(1800),
   lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
   lastFetchError: text('last_fetch_error'), // NULL = last fetch succeeded
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 

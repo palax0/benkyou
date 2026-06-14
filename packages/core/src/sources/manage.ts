@@ -12,6 +12,7 @@ export interface SourceWithStats {
   pollInterval: number | null;
   lastPolledAt: Date | null;
   lastFetchError: string | null;
+  consecutiveFailures: number;
   itemCount: number;
 }
 
@@ -31,6 +32,7 @@ export async function listSourcesWithStats(): Promise<SourceWithStats[]> {
       pollInterval: sources.pollInterval,
       lastPolledAt: sources.lastPolledAt,
       lastFetchError: sources.lastFetchError,
+      consecutiveFailures: sources.consecutiveFailures,
       // Correlated subquery: ${sources.id} in sql<> emits just "id" (no table prefix),
       // which PostgreSQL resolves as the subquery's inner column — the correlation
       // breaks and count returns 0. The table-qualified literal `sources.id` is the
