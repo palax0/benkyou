@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import type { FeedItem } from '@benkyou/core/items';
 import { SourceBadge } from '@/components/SourceBadge';
+import { TranscriptBadge } from '@/components/TranscriptBadge';
 import {
   ArticleIcon,
   BookmarkIcon,
@@ -48,6 +49,7 @@ export async function ItemCard({ item }: { item: FeedItem }) {
         <span className="relative z-10 truncate text-muted">
           <SourceBadge id={item.sourceId} name={item.sourceName} />
         </span>
+        {item.contentType === 'video' ? <TranscriptBadge status={item.transcriptStatus} /> : null}
         {item.publishedAt ? (
           <>
             <span aria-hidden className="text-line">

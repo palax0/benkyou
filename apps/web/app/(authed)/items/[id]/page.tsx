@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getItemForUser, getItemProgress } from '@benkyou/core/items';
 import { DeepSummary } from '@/components/DeepSummary';
 import { AutoRefresh } from '@/components/AutoRefresh';
+import { TranscriptBadge } from '@/components/TranscriptBadge';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,6 +54,11 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             {t('original')}
           </a>
         </div>
+        {item.contentType === 'video' ? (
+          <div className="mt-2">
+            <TranscriptBadge status={item.transcriptStatus} />
+          </div>
+        ) : null}
       </header>
 
       <DeepSummary itemId={item.id} initial={item.deepSummary} />
