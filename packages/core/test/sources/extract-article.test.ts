@@ -23,16 +23,34 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('fetchReadable', () => {
-  test('extracts main article text, dropping nav/footer', async () => {
-    const text = await fetchReadable('https://site.test/article');
-    expect(text).toContain('first substantive paragraph');
-    expect(text).not.toContain('menu junk');
-    expect(text).not.toContain('footer junk');
+  test('returns ok markdown, dropping nav/footer', async () => {
+    const r = await fetchReadable('https://site.test/article');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.markdown).toContain('first substantive paragraph');
+      expect(r.markdown).not.toContain('menu junk');
+      expect(r.markdown).not.toContain('footer junk');
+    }
   });
 
-  test('returns null on HTTP error (degrade, do not throw)', async () => {
+  test('403 → blocked (degrade, do not throw)', async () => {
+    server.use(http.get('https://site.test/article', () => new HttpResponse(null, { status: 403 })));
+    expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'blocked' });
+  });
+
+  test('cf-mitigated header → blocked', async () => {
+    server.use(http.get('https://site.test/article', () => new HttpResponse(null, { status: 503, headers: { 'cf-mitigated': 'challenge' } })));
+    expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'blocked' });
+  });
+
+  test('5xx → fetch_failed', async () => {
     server.use(http.get('https://site.test/article', () => new HttpResponse(null, { status: 500 })));
-    expect(await fetchReadable('https://site.test/article')).toBeNull();
+    expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'fetch_failed' });
+  });
+
+  test('200 but Readability finds nothing → empty_parse', async () => {
+    server.use(http.get('https://site.test/article', () => new HttpResponse('<html><body><div></div></body></html>', { headers: { 'content-type': 'text/html' } })));
+    expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'empty_parse' });
   });
 });
 

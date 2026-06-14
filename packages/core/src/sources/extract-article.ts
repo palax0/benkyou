@@ -1,26 +1,28 @@
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
-import { htmlToText } from '../util/text';
-import type { ExtractInput, ExtractResult } from './types';
+import { htmlToMarkdown, stripMarkdown } from '../util/markdown';
+import type { ExtractInput, ExtractResult, ExtractStatus, FetchFailReason, FetchOutcome } from './types';
+import { fetchViaReader } from './reader';
 
-// Below this many chars of *plain text* (feed content is HTML-stripped first, so
-// markup doesn't inflate the count) we assume the feed gave only a blurb and fetch
-// the real article. Article-fetch failures degrade (keep what we had) rather than
-// failing the stage — spec §6.2: pipeline continues even without full text.
-const FULLTEXT_MIN_CHARS = 600;
-
-export async function fetchReadable(url: string): Promise<string | null> {
+// Direct fetch + Readability → markdown. Returns a typed FetchOutcome instead of
+// swallowing failures as null — observability core of design §5.2.
+export async function fetchReadable(url: string): Promise<FetchOutcome> {
+  let res: Response;
   try {
-    const res = await fetch(url, { headers: { 'user-agent': 'benkyou/0.1 (+readability)' } });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const dom = new JSDOM(html, { url });
-    const article = new Readability(dom.window.document).parse();
-    const text = article?.textContent?.trim();
-    return text && text.length > 0 ? text : null;
+    res = await fetch(url, { headers: { 'user-agent': 'benkyou/0.1 (+readability)' } });
   } catch {
-    return null;
+    return { ok: false, reason: 'fetch_failed' };
   }
+  if (res.status === 403 || res.headers.has('cf-mitigated')) return { ok: false, reason: 'blocked' };
+  if (!res.ok) return { ok: false, reason: 'fetch_failed' };
+  const html = await res.text();
+  const dom = new JSDOM(html, { url });
+  const article = new Readability(dom.window.document).parse();
+  const contentHtml = article?.content?.trim(); // .content (HTML) not .textContent — design §5.2 step 2
+  if (!contentHtml) return { ok: false, reason: 'empty_parse' };
+  const markdown = htmlToMarkdown(contentHtml);
+  if (markdown.length === 0) return { ok: false, reason: 'empty_parse' };
+  return { ok: true, markdown };
 }
 
 export async function resolveContent(
