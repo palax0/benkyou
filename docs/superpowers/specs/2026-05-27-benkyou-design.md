@@ -263,7 +263,7 @@ items
   content_type    text not null                                    -- 'article' | 'video' | 'discussion' | 'paper'
   raw_content     text                                             -- 正文 / 字幕 / 转写
   transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'skipped_serverless' | 'unavailable'
-  transcript_segments jsonb                                        -- 视频说话人分段（如果可用）
+  transcript_segments jsonb                                        -- timed transcript segments [{ start, end, text, speaker? }]；speaker 可选
   video_duration  int                                              -- 秒，仅视频
   video_kind      text                                             -- 'auto' | 'interview' | 'tutorial' | 'talk' | 'other'
   summary         text                                             -- 1-2 句轻量摘要
@@ -466,7 +466,7 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
 - 长视频切 10min chunk，5s overlap
 - 并发调 Whisper endpoint，**并发上限 3**（p-limit；无上限的 `Promise.all` 在 3h 视频 ≈ 18 chunk 时会撞 endpoint rate limit）
 - 合并 transcripts，处理 chunk 边界（用 overlap 内的相似度对齐）
-- 若 endpoint 返回 speaker labels（如 Deepgram），存入 `transcript_segments` jsonb；否则 `raw_content` 存纯文本
+- transcribe **始终**写入 timed `transcript_segments` `[{ start, end, text, speaker? }]`（与 M2a 字幕 adapter 同契约）；`speaker` 仅在 endpoint 返回 diarization labels（如 Deepgram）时填充。`raw_content` 同时存扁平化纯文本
 - 完成 → `transcript_status='present'`；失败超 max attempts → `transcript_status='unavailable'`（继续 embed/score 用 title）
 
 **转写与状态机的归属（关键决策，M2 前定死）**：走转写路径的 item，在 transcribe 得出终态（`present` / `unavailable`）之前 **state 停留在 `pending`** —— "extract 成功"的定义**包含转写完成**，由 transcribe 子任务在到达终态时推进 `state='extracted'` 并入队 embed。理由：embed/score/summary 都消费 `raw_content`；若 extract 先行推进，转写到货后内容已无重跑路径——runner 的 at-least-once 状态守卫（§6.1）会丢弃任何回流 job，这个守卫不能为转写开洞。被否决的备选：(a) 显式回流 re-embed——状态守卫要加例外规则，复杂度上升且引入"done 之后内容变化"的不一致窗口；(b) 转写不参与 AI 链——视频内容不可搜索、不参与评分，产品价值打折。代价与配套：extract 对长视频是分钟级 stage，`transcribe` 队列的 pg-boss 超时（`expireInSeconds`）须按 `video_manual_limit` 推算放宽；其重试计数独立于 extract（`transcript_status` 的 pending→unavailable 由 transcribe 自己的 max attempts 驱动，items.attempts 不混用）。
