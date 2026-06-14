@@ -4,6 +4,7 @@ import { getItemForUser, getItemProgress } from '@benkyou/core/items';
 import { DeepSummary } from '@/components/DeepSummary';
 import { AutoRefresh } from '@/components/AutoRefresh';
 import { TranscriptBadge } from '@/components/TranscriptBadge';
+import { ArticleBody } from '@/components/ArticleBody';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -63,11 +64,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
       <DeepSummary itemId={item.id} initial={item.deepSummary} />
 
-      {item.rawContent ? (
-        <article className="whitespace-pre-wrap text-sm leading-relaxed">{item.rawContent}</article>
-      ) : (
-        <p className="text-sm text-muted">{t('noContent')}</p>
-      )}
+      <ArticleBody contentMd={item.contentMd} rawContent={item.rawContent} emptyLabel={t('noContent')} />
     </main>
   );
 }
