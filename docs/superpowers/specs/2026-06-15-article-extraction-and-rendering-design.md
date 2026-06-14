@@ -55,10 +55,14 @@
 
 `extract_status` 枚举:
 
-- `ok` — 拿到有效正文(feed / 直连 / reader 任一)
+- `ok` — 没有任何"需要的增强步骤"失败:feed 自带正文已达阈值,**或**直连/reader 成功返回(即便结果较短——一篇合法的短文也是 `ok`)
 - `blocked` — 直连 HTTP 403 或 Cloudflare 挑战(`cf-mitigated` 等)
 - `fetch_failed` — 网络错误 / 5xx / 抛异常
 - `empty_parse` — 抓到页面但 Readability 解析为空(典型 SPA / 客户端渲染)
+
+`ok` 与失败值的判定**不是**单纯按正文长度,而是按"是否有需要的增强尝试失败"(精确规则见 §5.2 step 4)。失败值在两种情形下出现:`content_md` 为空(完全没抓到),或 `content_md` 是一份不足阈值的 feed 摘要而后续增强失败(部分内容);两者由 UI 据 `content_md` 是否为空区分(§7.2)。
+
+**只对 `content_type='article'` 有意义。** 不引入 `na` 枚举;非文章 item(视频等)其值停留在默认 `'ok'`,但 UI **仅在 `content_type='article'` 时解释/展示它**(视频走 `transcript_status`)。
 
 **不动的列:** `raw_content`(续存纯文本)、`search_vec` 生成列(schema.ts:151,仍读 `raw_content`)、embedding、summary —— 零改动,是双存储的核心收益。
 
@@ -109,18 +113,28 @@ export async function fetchViaReader(
 - 不抛错:HTTP 403/挑战 → `blocked`;网络/5xx/异常 → `fetch_failed`;200 但空 → `empty_parse`。
 - 不在 reader 客户端内做 markdown→text;那是 `resolveContent` 的职责(见 5.2)。
 
+**URL 拼接细则(plan 落实,避免低级兼容 bug):**
+- `baseUrl` 去掉结尾 `/` 后再拼;最终形如 `{base}/{targetUrl}`。
+- `targetUrl` **保留完整 query string**(很多文章 URL 的 id 在 query 里);按 Jina 约定原样附在 base 之后,不做额外 encode 拆解(Jina 接受裸 URL 直接拼接)。
+- `apiKey` 为空/缺省时**不发** `Authorization` 头(发空 Bearer 会被部分网关拒)。
+- 建议带 `Accept` 适配纯文本/markdown;具体 header 集合 plan 定。
+
 ### 5.2 `resolveContent` 三段回退 — 改 `sources/extract-article.ts`
 
-产出统一为 markdown,逐段择优(取最长有效 markdown),并记录最终 `extract_status`:
+产出统一为 markdown,逐段择优(取最长有效 markdown),并记录最终 `extract_status`。维护两个累积量:`best`(当前最长有效 markdown,初值 feed)与 `lastFail`(已发生的增强失败 reason,按 §step4 优先级合并):
 
-1. **feed 自带正文**:`content:encoded`(HTML)→ markdown(turndown)。
-2. **不足阈值且有 URL → 直连** `fetchReadable`:Readability **`.content`(HTML)→ markdown**(改掉现在的 `.textContent`)。`fetchReadable` **改为返回 `FetchOutcome`** 而非裸 `null` —— 这是可观测性的核心,失败原因不再被吞。
-3. **仍为空且 reader 已配置 → `fetchViaReader`**。
-4. 选最长有效 markdown:
-   - 有正文 → `extract_status = 'ok'`;`content_md = md`;`raw_content = stripMarkdown(md)`。
-   - 全为空 → `content_md = null`;`raw_content = null`;`extract_status` = 最后一次有意义失败的 reason(直连优先反映,reader 兜底覆盖)。
+1. **feed 自带正文**:`content:encoded`(HTML)→ markdown(turndown)。作为 `best` 初值。
+2. **`best` 不足阈值且有 URL → 直连** `fetchReadable`:Readability **`.content`(HTML)→ markdown**(改掉现在的 `.textContent`)。`fetchReadable` **改为返回 `FetchOutcome`** 而非裸 `null` —— 这是可观测性的核心,失败原因不再被吞。成功且更长 → 更新 `best`;失败 → 并入 `lastFail`。
+3. **`best` 仍不足阈值(或直连失败)且 reader 已配置 → `fetchViaReader`**。成功且更长 → 更新 `best`;失败 → 并入 `lastFail`。
+   > 触发条件是"**`best` 仍不足阈值,或上一步失败**",**不是**"`best` 为空"。否则:RSS 只有 200 字摘要、直连 403 时,`best` 非空(摘要),reader 永不触发、`extract_status` 误判为 `ok`,UI 不会提示正文不完整。
+4. **最终 `extract_status` 与落库:**
+   - **成功覆盖失败**:若任一来源把 `best` 提供为"成功获取"(feed 自带达阈值,或直连/reader `ok`)→ `extract_status = 'ok'`(即便结果较短,合法短文也算 `ok`)。
+   - **否则**(`best` 仍不足阈值,且发生过增强失败)→ `extract_status = lastFail`。**失败间优先级:`blocked` > `empty_parse` > `fetch_failed`**(保留对用户最有意义的原因——例如直连 `blocked` 而 reader `fetch_failed`,最终应是 `blocked`,不被覆盖)。
+   - `content_md`:`best` 非空 → markdown;`best` 为空 → `null`。
+   - `raw_content`:`best` 非空 → `stripMarkdown(best)`;为空 → `null`。
+   - 据此,`extract_status != 'ok'` 有两种 UI 形态:`content_md` 为空 = "正文未抓取";`content_md` 非空(不足阈值的摘要)= "正文可能不完整"(§7.2)。
 
-`FULLTEXT_MIN_CHARS = 600` 阈值语义不变(现在作用在 markdown 长度上,可接受)。
+`FULLTEXT_MIN_CHARS = 600` 阈值语义不变(现在作用在 markdown 长度上,可接受),并同时承担"是否触发下一段增强"与"短文是否算完整"的判定基线。
 
 ### 5.3 markdown 工具
 
@@ -146,30 +160,39 @@ export async function fetchViaReader(
 - 有 `content_md` → 渲染 markdown(`react-markdown` + 消毒,如 `rehype-sanitize`;新依赖)。页面标题用 `items.title`,正文内部 H1/H2…来自 markdown —— 解决"标题/内容无区分"。
 - 无 `content_md` → fallback 到现状的 `raw_content` 纯文本(`whitespace-pre-wrap`),保证旧 item 不回归。
 
-### 7.2 抓取失败提示
+### 7.2 抓取状态提示(仅 `content_type='article'`)
 
-- `content_md` 为空 **且** `extract_status != 'ok'` → 展示提示块"正文未抓取(原因)" + 原文链接,原因文案据 `extract_status` 走 i18n。
+`extract_status != 'ok'` 时按 `content_md` 是否为空分两种形态(原因文案据 `extract_status` 走 i18n,均附原文链接):
+
+- `content_md` **为空** → "正文未抓取(原因)" + 原文链接。
+- `content_md` **非空**(不足阈值的摘要,部分内容) → "正文可能不完整(原因)" + 原文链接,正文照常渲染。
 
 ### 7.3 总结"仅据标题"标注
 
-- 同 7.2 条件下,给 summary 加"仅据标题/摘要"标注(轻量 badge / 角标)。
+- `content_md` 为空 且 `extract_status != 'ok'`(即 7.2 第一种)→ 给 summary 加"仅据标题/摘要"标注(轻量 badge / 角标)。
 
 ### 7.4 列表角标(可选)
 
-- 列表卡片复用 `transcript_status` 的 badge 模式给文章加 `extract_status` 角标。优先级低,可后置。
+- 列表**行**复用 `transcript_status` 的 badge 模式给文章加 `extract_status` 角标(遵守 DESIGN.md 的 No-Card Rule,不引入卡片)。优先级低,可后置。
 
 ### 7.5 路由提示(留给 writing-plans)
 
-- **markdown 阅读视图是真正的新视觉面**(prose 排版:标题层级、代码块、列表、引用)。若 `DESIGN.md` 缺 prose 基元,按 CLAUDE.md 工作流可能需 **spike-first**(impeccable `craft` 先定 prose token)再建逻辑;否则功能优先、后 polish。
-- reader 客户端、可观测列、设置表单、失败提示属 🔧 派生/逻辑任务。
+- **markdown 阅读视图按 🎨 spike-first 处理。** 现 `DESIGN.md` 有正文 typography / 行长原则,但**没有 markdown prose 的 heading、code block、blockquote、list 基元**。按 CLAUDE.md 工作流先 impeccable `craft` 定这些 prose token、`document` 进 `DESIGN.md`,再把渲染逻辑建进去——避免功能 pass 里就着空白即兴发挥。
+- reader 客户端、可观测列、设置表单、失败/不完整提示属 🔧 派生/逻辑任务。
 
 ## 8. 测试（TDD）
 
 - `reader.ts`(MSW):200 markdown → `{ok:true}`;403/挑战 → `blocked`;5xx/网络 → `fetch_failed`;200 空 → `empty_parse`;Bearer 头按 `apiKey` 有无正确附带。
-- `resolveContent`:feed 足够 → 不抓且 `ok`;直连成功 → `ok` 且 `content_md`/`raw_content` 双写;直连 403 且无 reader → `content_md=null` / `raw_content=null` / `extract_status='blocked'`;配了 reader 且 reader 成功 → reader markdown 胜出 → `ok`。
+- `resolveContent`:
+  - feed 足够 → 不抓且 `ok`;直连成功 → `ok` 且 `content_md`/`raw_content` 双写;配了 reader 且 reader 成功 → reader markdown 胜出 → `ok`。
+  - 直连合法短文(成功但 < 阈值)→ `ok`(不误判失败)。
+  - 直连 403 且无 reader、feed 也空 → `content_md=null` / `raw_content=null` / `extract_status='blocked'`。
+  - **部分内容**:feed 给不足阈值摘要 + 直连 403(无 reader)→ `content_md` 非空(摘要)/ `extract_status='blocked'`(触发条件按"不足阈值"而非"为空")。
+  - **触发**:feed 不足阈值时必触发直连;`best` 仍不足阈值时(配了 reader)必触发 reader。
+  - **失败优先级**:直连 `blocked` + reader `fetch_failed` → 最终 `blocked`(不被覆盖)。
 - `stripMarkdown`:标题/代码块/链接 → 干净纯文本(代码内容保留、围栏去除)。
 - `extract-article` / `extract.ts`:`content_md` 与 `extract_status` 正确落库;dispatcher 默认 `'ok'`。
-- (UI)e2e 或组件级:`content_md` 渲染为结构化 HTML;缺失时 fallback;`blocked` 时显示提示 + 原文链接。
+- (UI)e2e 或组件级:`content_md` 渲染为结构化 HTML;缺失时 fallback;空 + `blocked` → "正文未抓取" + 链接;非空 + `blocked` → "正文可能不完整" + 链接且正文仍渲染;非 article 的 item 不展示 `extract_status`。
 
 ## 9. 变更清单（对母文档的增量）
 
