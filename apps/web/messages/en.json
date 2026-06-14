@@ -59,7 +59,11 @@
     "requestDimensionsHelp": "For high-dim models, check this to request {dim}-dim vectors. The model must support dimensions / Matryoshka truncation.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}",
-    "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}."
+    "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}.",
+    "readerSection": "Reader endpoint (fallback)",
+    "readerBaseUrlPlaceholder": "Reader base URL (e.g. https://r.jina.ai), blank to disable",
+    "readerApiKeyPlaceholder": "Reader API key (optional)",
+    "readerApiKeyConfigured": "Reader API key saved — leave blank to keep"
   },
   "paste": {
     "placeholder": "Paste an article or video URL…",

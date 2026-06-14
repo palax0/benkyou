@@ -7,9 +7,10 @@ import { updateSettingsAction, type SettingsState } from './actions';
 
 const field = 'rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800';
 
-export type SettingsFormSettings = Omit<UserSettings, 'llmApiKey' | 'embedApiKey'> & {
+export type SettingsFormSettings = Omit<UserSettings, 'llmApiKey' | 'embedApiKey' | 'readerApiKey'> & {
   llmApiKeyConfigured: boolean;
   embedApiKeyConfigured: boolean;
+  readerApiKeyConfigured: boolean;
 };
 
 export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSettings; embedDim: number }) {
@@ -60,6 +61,21 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
       <p className="text-xs text-slate-500">{t('requestDimensionsHelp', { dim: embedDim })}</p>
 
       <p className="text-xs text-slate-500">{t('embedDimNote', { dim: embedDim })}</p>
+
+      <h2 className="font-semibold">{t('readerSection')}</h2>
+      <input
+        name="readerBaseUrl"
+        defaultValue={v?.readerBaseUrl ?? settings.readerBaseUrl ?? ''}
+        className={field}
+        placeholder={t('readerBaseUrlPlaceholder')}
+      />
+      <input
+        name="readerApiKey"
+        type="password"
+        defaultValue={v?.readerApiKey ?? ''}
+        className={field}
+        placeholder={settings.readerApiKeyConfigured ? t('readerApiKeyConfigured') : t('readerApiKeyPlaceholder')}
+      />
 
       <input
         name="interestTags"

@@ -17,9 +17,17 @@ describe('settings form secret boundary', () => {
   test('settings page strips raw provider API keys before passing props to the client form', async () => {
     const source = await readFile(path.join(dir, 'page.tsx'), 'utf8');
 
-    expect(source).toContain('const { llmApiKey, embedApiKey, ...safeSettings } = settings;');
+    expect(source).toContain('const { llmApiKey, embedApiKey, readerApiKey, ...safeSettings } = settings;');
     expect(source).toContain('llmApiKeyConfigured: Boolean(llmApiKey)');
     expect(source).toContain('embedApiKeyConfigured: Boolean(embedApiKey)');
     expect(source).not.toContain('<SettingsForm settings={settings}');
+    expect(source).toContain('readerApiKeyConfigured: Boolean(readerApiKey)');
+  });
+
+  test('client form does not read the stored reader API key, and renders the reader section', async () => {
+    const source = await readFile(path.join(dir, 'SettingsForm.tsx'), 'utf8');
+    expect(source).not.toMatch(/settings\.readerApiKey(?!Configured)/);
+    expect(source).toContain('readerApiKeyConfigured');
+    expect(source).toContain("name=\"readerBaseUrl\"");
   });
 });
