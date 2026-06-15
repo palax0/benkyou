@@ -25,7 +25,7 @@ export type ExtractStatus = 'ok' | FetchFailReason;
 // the observability core of design §5.2. 'blocked' = 403 / Cloudflare challenge;
 // 'fetch_failed' = network / 5xx / threw; 'empty_parse' = 200 but Readability empty (SPA).
 export type FetchOutcome =
-  | { ok: true; markdown: string }
+  | { ok: true; markdown: string; title?: string | null }
   | { ok: false; reason: FetchFailReason };
 
 // Timed transcript contract (design §6, video-article-design.md): subtitle/Whisper
@@ -50,6 +50,10 @@ export interface ExtractInput {
 
 export interface ExtractResult {
   rawContent: string | null;
+  // Real title discovered during extraction (Readability / video metadata). The
+  // dispatcher persists it ONLY over a URL placeholder (paste) — never over a feed
+  // title. Absent → keep the existing title. See extract.ts resolveTitle.
+  title?: string | null;
   contentMd?: string | null; // markdown body for display; dispatcher writes null if absent
   extractStatus?: ExtractStatus; // dispatcher defaults to 'ok' (parallels transcriptStatus)
   contentType: 'article' | 'video' | 'discussion' | 'paper';

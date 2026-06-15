@@ -4,11 +4,24 @@ import { resolveAdapter } from '../sources';
 import { getUserSettings } from '../settings';
 import type { ExtractResult } from '../sources/types';
 
+// A paste item starts with title = its URL (placeholder). extract refines it from the
+// adapter's discovered title, but ONLY over that placeholder — a real feed title (RSS)
+// must never be clobbered by a possibly-worse extracted title.
+export function resolveTitle(existingTitle: string, url: string, discovered?: string | null): string {
+  const isPlaceholder = existingTitle.length === 0 || existingTitle === url;
+  const next = discovered?.trim();
+  return isPlaceholder && next ? next : existingTitle;
+}
+
 // Pure mapping from adapter result → items column patch. Dispatcher defaults
 // contentMd=null and extractStatus='ok' (parallels transcriptStatus default).
-export function extractColumns(result: ExtractResult, existing: { videoKind: string | null }) {
+export function extractColumns(
+  result: ExtractResult,
+  existing: { videoKind: string | null; title: string; url: string },
+) {
   return {
     rawContent: result.rawContent,
+    title: resolveTitle(existing.title, existing.url, result.title),
     contentMd: result.contentMd ?? null,
     extractStatus: result.extractStatus ?? 'ok',
     contentType: result.contentType,
@@ -53,5 +66,8 @@ export async function extractItem(itemId: string): Promise<void> {
     reader,
   });
 
-  await db.update(items).set(extractColumns(result, { videoKind: item.videoKind })).where(eq(items.id, itemId));
+  await db
+    .update(items)
+    .set(extractColumns(result, { videoKind: item.videoKind, title: item.title, url: item.url }))
+    .where(eq(items.id, itemId));
 }

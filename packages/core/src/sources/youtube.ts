@@ -13,6 +13,7 @@ export interface RawCue {
 }
 export interface RawSubtitleTrack {
   durationSeconds: number | null;
+  title?: string | null; // video title from metadata; refines a URL-placeholder item title
   cues: RawCue[];
 }
 export type FetchYoutubeSubtitle = (videoId: string) => Promise<RawSubtitleTrack | null>;
@@ -51,9 +52,10 @@ function cuesToSegments(cues: RawCue[]): TranscriptSegment[] {
   }));
 }
 
-function unavailable(durationSeconds: number | null): ExtractResult {
+function unavailable(durationSeconds: number | null, title?: string | null): ExtractResult {
   return {
     rawContent: null,
+    ...(title ? { title } : {}),
     contentType: 'video',
     transcriptStatus: 'unavailable',
     transcriptSegments: null,
@@ -81,14 +83,17 @@ export function createYoutubeAdapter(fetchSubtitle: FetchYoutubeSubtitle): Sourc
         return unavailable(null);
       }
 
-      if (!track || track.cues.length === 0) return unavailable(track?.durationSeconds ?? null);
+      if (!track || track.cues.length === 0) {
+        return unavailable(track?.durationSeconds ?? null, track?.title ?? null);
+      }
 
       const segments = cuesToSegments(track.cues);
       const rawContent = segments.map((s) => s.text).join('\n').trim();
-      if (rawContent.length === 0) return unavailable(track.durationSeconds);
+      if (rawContent.length === 0) return unavailable(track.durationSeconds, track.title);
 
       return {
         rawContent,
+        ...(track.title ? { title: track.title } : {}),
         contentType: 'video',
         transcriptStatus: 'present',
         transcriptSegments: segments,
@@ -120,13 +125,14 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
 
   // basic_info.duration is number | undefined per youtubei.js v17 MediaInfo types.
   const durationSeconds = info.basic_info.duration ?? null;
+  const title = info.basic_info.title ?? null;
 
   let transcript;
   try {
     transcript = await info.getTranscript();
   } catch {
     // No transcript panel = definitively no captions → degrade.
-    return { durationSeconds, cues: [] };
+    return { durationSeconds, title, cues: [] };
   }
 
   // Shape (v17): TranscriptInfo.transcript → Transcript (content: TranscriptSearchPanel | null)
@@ -144,7 +150,7 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
     })
     .filter((c) => c.text.trim().length > 0);
 
-  return { durationSeconds, cues };
+  return { durationSeconds, title, cues };
 };
 
 export const youtubeAdapter: SourceAdapter = createYoutubeAdapter(fetchYoutubeSubtitle);

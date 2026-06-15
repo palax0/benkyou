@@ -89,6 +89,19 @@ describe('youtube adapter extract', () => {
     expect(r.transcriptStatus).toBe('unavailable');
   });
 
+  test('present captions carry the video title', async () => {
+    const adapter = createYoutubeAdapter(async () => ({ ...present, title: 'My Video' }));
+    const r = await adapter.extract({ url: 'https://youtu.be/dQw4w9WgXcQ', rawContent: null, externalId: null });
+    expect(r.title).toBe('My Video');
+  });
+
+  test('unavailable captions still carry the title (downstream summary/score need it)', async () => {
+    const adapter = createYoutubeAdapter(async () => ({ durationSeconds: 50, title: 'Captionless', cues: [] }));
+    const r = await adapter.extract({ url: 'https://youtu.be/dQw4w9WgXcQ', rawContent: null, externalId: null });
+    expect(r.transcriptStatus).toBe('unavailable');
+    expect(r.title).toBe('Captionless');
+  });
+
   test('fetchItems throws (youtube is adhoc-only in M2a)', async () => {
     const adapter = createYoutubeAdapter(async () => null);
     await expect(adapter.fetchItems({})).rejects.toThrow(/adhoc/);

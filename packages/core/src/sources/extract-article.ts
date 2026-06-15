@@ -22,7 +22,8 @@ export async function fetchReadable(url: string): Promise<FetchOutcome> {
   if (!contentHtml) return { ok: false, reason: 'empty_parse' };
   const markdown = htmlToMarkdown(contentHtml);
   if (markdown.length === 0) return { ok: false, reason: 'empty_parse' };
-  return { ok: true, markdown };
+  const title = article?.title?.trim() || null; // refines a URL-placeholder title (extract.ts)
+  return { ok: true, markdown, title };
 }
 
 // Below this many chars of PLAIN TEXT (stripMarkdown of the candidate, so link URLs /
@@ -36,6 +37,7 @@ export interface ResolvedContent {
   contentMd: string | null;
   rawContent: string | null;
   extractStatus: ExtractStatus;
+  title: string | null; // title of the winning candidate (Readability); null if none
 }
 
 function plainLen(md: string): number {
@@ -48,13 +50,17 @@ export async function resolveContent(
   reader?: { baseUrl: string; apiKey?: string },
 ): Promise<ResolvedContent> {
   let best = feedHtml ? htmlToMarkdown(feedHtml) : ''; // markdown is the canonical form
+  let bestTitle: string | null = null; // title travels with the candidate that wins `best`
   let succeeded = plainLen(best) >= FULLTEXT_MIN_CHARS; // adequate feed alone counts as ok
   let lastFail: FetchFailReason | null = null;
   const mergeFail = (r: FetchFailReason) => {
     if (!lastFail || FAIL_PRIORITY[r] > FAIL_PRIORITY[lastFail]) lastFail = r;
   };
-  const consider = (md: string) => {
-    if (plainLen(md) > plainLen(best)) best = md;
+  const consider = (md: string, title?: string | null) => {
+    if (plainLen(md) > plainLen(best)) {
+      best = md;
+      if (title) bestTitle = title;
+    }
     succeeded = true;
   };
 
@@ -62,7 +68,7 @@ export async function resolveContent(
   // 200-char feed blurb must still escalate (design §5.2 step 3 note).
   if (plainLen(best) < FULLTEXT_MIN_CHARS && url) {
     const outcome = await fetchReadable(url);
-    if (outcome.ok) consider(outcome.markdown);
+    if (outcome.ok) consider(outcome.markdown, outcome.title);
     else mergeFail(outcome.reason);
   }
 
@@ -70,23 +76,24 @@ export async function resolveContent(
   // (a failed or absent prior stage leaves best unchanged, so it stays below) AND reader configured.
   if (plainLen(best) < FULLTEXT_MIN_CHARS && reader?.baseUrl && url) {
     const outcome = await fetchViaReader(url, reader);
-    if (outcome.ok) consider(outcome.markdown);
+    if (outcome.ok) consider(outcome.markdown); // reader (Jina) returns body only, no title
     else mergeFail(outcome.reason);
   }
 
   const extractStatus: ExtractStatus = succeeded ? 'ok' : (lastFail ?? 'ok');
   const md = best.length > 0 ? best : null;
-  return { contentMd: md, rawContent: md ? stripMarkdown(md) : null, extractStatus };
+  return { contentMd: md, rawContent: md ? stripMarkdown(md) : null, extractStatus, title: bestTitle };
 }
 
 export async function extractArticle(input: ExtractInput): Promise<ExtractResult> {
-  const { contentMd, rawContent, extractStatus } = await resolveContent(
+  const { contentMd, rawContent, extractStatus, title } = await resolveContent(
     input.rawContent,
     input.url || null,
     input.reader,
   );
   return {
     rawContent,
+    title,
     contentMd,
     extractStatus,
     contentType: 'article',

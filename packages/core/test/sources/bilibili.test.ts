@@ -58,6 +58,19 @@ describe('bilibili adapter extract', () => {
     expect(r.transcriptStatus).toBe('unavailable');
   });
 
+  test('present subtitles carry the video title', async () => {
+    const adapter = createBilibiliAdapter(async () => ({ ...present, title: '视频标题' }));
+    const r = await adapter.extract({ url: 'https://www.bilibili.com/video/BV1xx411c7mD', rawContent: null, externalId: null });
+    expect(r.title).toBe('视频标题');
+  });
+
+  test('no-captions degrade still carries the title', async () => {
+    const adapter = createBilibiliAdapter(async () => ({ durationSeconds: 10, title: '无字幕视频', cues: [] }));
+    const r = await adapter.extract({ url: 'https://www.bilibili.com/video/BV1xx411c7mD', rawContent: null, externalId: null });
+    expect(r.transcriptStatus).toBe('unavailable');
+    expect(r.title).toBe('无字幕视频');
+  });
+
   test('fetchItems throws (adhoc-only)', async () => {
     const adapter = createBilibiliAdapter(async () => null);
     await expect(adapter.fetchItems({})).rejects.toThrow(/adhoc/);

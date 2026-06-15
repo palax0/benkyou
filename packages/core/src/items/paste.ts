@@ -33,7 +33,7 @@ export async function pasteUrl(rawUrl: string): Promise<PasteResult> {
       externalId: null,
       url: rawUrl,
       urlHash: hash,
-      title: rawUrl, // placeholder; extract/summary refine the displayed title later
+      title: rawUrl, // URL placeholder; extract overwrites it via resolveTitle once the adapter finds a real title
       contentType: initialContentType(rawUrl),
       rawContent: null,
       state: 'pending',

@@ -52,6 +52,12 @@ describe('fetchReadable', () => {
     server.use(http.get('https://site.test/article', () => new HttpResponse('<html><body><div></div></body></html>', { headers: { 'content-type': 'text/html' } })));
     expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'empty_parse' });
   });
+
+  test('ok outcome carries the Readability title', async () => {
+    const r = await fetchReadable('https://site.test/article');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(typeof r.title === 'string' && r.title.length > 0).toBe(true);
+  });
 });
 
 describe('resolveContent', () => {
@@ -135,7 +141,18 @@ describe('resolveContent', () => {
 
   test('no content + no url → empty result', async () => {
     const r = await resolveContent(null, null);
-    expect(r).toEqual({ contentMd: null, rawContent: null, extractStatus: 'ok' });
+    expect(r).toEqual({ contentMd: null, rawContent: null, extractStatus: 'ok', title: null });
+  });
+
+  test('direct fetch title flows into ResolvedContent.title', async () => {
+    const r = await resolveContent(null, 'https://site.test/article');
+    expect(r.title && r.title.length > 0).toBeTruthy();
+  });
+
+  test('feed-only (no fetch) leaves title null — feed title lives on the item already', async () => {
+    const full = `<p>${'Substantive feed body sentence. '.repeat(20)}</p>`;
+    const r = await resolveContent(full, 'https://site.test/never-fetched');
+    expect(r.title).toBeNull();
   });
 });
 
