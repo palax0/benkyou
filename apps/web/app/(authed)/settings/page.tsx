@@ -7,7 +7,7 @@ export default async function SettingsPage() {
   const t = await getTranslations('settings');
   const settings = await getUserSettings();
   if (!settings) return null; // authed layout guarantees initialized; defensive
-  const { llmApiKey, embedApiKey, ...safeSettings } = settings;
+  const { llmApiKey, embedApiKey, readerApiKey, ...safeSettings } = settings;
 
   return (
     <main className="flex flex-col gap-8">
@@ -19,6 +19,7 @@ export default async function SettingsPage() {
             ...safeSettings,
             llmApiKeyConfigured: Boolean(llmApiKey),
             embedApiKeyConfigured: Boolean(embedApiKey),
+            readerApiKeyConfigured: Boolean(readerApiKey),
           }}
           embedDim={settings.embedDim}
         />

@@ -1,13 +1,40 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { getItemForUser } from '@benkyou/core/items';
+import { getItemForUser, getItemProgress } from '@benkyou/core/items';
 import { DeepSummary } from '@/components/DeepSummary';
+import { AutoRefresh } from '@/components/AutoRefresh';
+import { TranscriptBadge } from '@/components/TranscriptBadge';
+import { ArticleBody } from '@/components/ArticleBody';
+import { ExtractNotice, SummaryBasisBadge } from '@/components/ExtractNotice';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await getItemForUser(id);
-  if (!item) notFound();
   const t = await getTranslations('item');
+
+  if (!item) {
+    // Not done yet (or doesn't exist) — show pipeline progress if it exists.
+    const progress = await getItemProgress(id);
+    if (!progress) notFound();
+    return (
+      <main className="flex flex-col gap-4">
+        <header className="flex items-center justify-between">
+          <h1 className="font-serif text-2xl leading-snug font-semibold text-balance text-ink">
+            {t('processingTitle')}
+          </h1>
+          <AutoRefresh />
+        </header>
+        <p className="text-sm text-muted">
+          {progress.state === 'failed'
+            ? t('processingFailed', { stage: progress.currentStage ?? '' })
+            : t('processingStage', { stage: progress.currentStage ?? progress.state })}
+        </p>
+        {progress.state === 'failed' && progress.lastError ? (
+          <pre className="whitespace-pre-wrap text-xs text-muted">{progress.lastError}</pre>
+        ) : null}
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-col gap-4">
@@ -29,15 +56,31 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             {t('original')}
           </a>
         </div>
+        {item.contentType === 'video' ? (
+          <div className="mt-2">
+            <TranscriptBadge status={item.transcriptStatus} />
+          </div>
+        ) : null}
+        <div className="mt-2">
+          <ExtractNotice
+            contentType={item.contentType}
+            extractStatus={item.extractStatus}
+            hasContentMd={Boolean(item.contentMd)}
+            url={item.url}
+          />
+        </div>
       </header>
 
-      <DeepSummary itemId={item.id} initial={item.deepSummary} />
+      <div className="flex flex-col gap-2">
+        <SummaryBasisBadge
+          contentType={item.contentType}
+          extractStatus={item.extractStatus}
+          hasContentMd={Boolean(item.contentMd)}
+        />
+        <DeepSummary itemId={item.id} initial={item.deepSummary} />
+      </div>
 
-      {item.rawContent ? (
-        <article className="whitespace-pre-wrap text-sm leading-relaxed">{item.rawContent}</article>
-      ) : (
-        <p className="text-sm text-muted">{t('noContent')}</p>
-      )}
+      <ArticleBody contentMd={item.contentMd} rawContent={item.rawContent} emptyLabel={t('noContent')} />
     </main>
   );
 }

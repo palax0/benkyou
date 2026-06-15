@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
 import type { RawItem, SourceAdapter } from './types';
+import { extractArticle } from './extract-article';
 
 interface RssConfig extends Record<string, unknown> {
   url: string;
@@ -55,4 +56,5 @@ export const rssAdapter: SourceAdapter = {
       })
       .filter((r) => r.url.length > 0);
   },
+  extract: extractArticle,
 };

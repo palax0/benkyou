@@ -1,13 +1,8 @@
-import type { SourceAdapter } from './types';
-import { rssAdapter } from './rss';
+// Importing resolve triggers adapter registration (rss, article, youtube, bilibili)
+// via the side-effectful registerAdapter calls at module load time in resolve.ts.
+import { getAdapter } from './registry';
+import { resolveAdapter, detectAdhocType } from './resolve';
 
-const ADAPTERS = new Map<string, SourceAdapter>([[rssAdapter.type, rssAdapter]]);
-
-export function getAdapter(type: string): SourceAdapter {
-  const adapter = ADAPTERS.get(type);
-  if (!adapter) throw new Error(`No source adapter registered for type: ${type}`);
-  return adapter;
-}
-
+export { getAdapter, resolveAdapter, detectAdhocType };
 export type { RawItem, SourceAdapter } from './types';
 export * from './manage';

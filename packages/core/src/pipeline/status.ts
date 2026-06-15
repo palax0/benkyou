@@ -2,6 +2,16 @@ import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDbClient, items, sources, aiUsage } from '../db';
 import { env } from '../config/env';
 
+// A source is "failing" once it has missed this many consecutive polls. Tuned to
+// survive a transient blip but surface a genuinely broken feed promptly.
+export const FAILING_SOURCE_THRESHOLD = 3;
+
+export interface PipelineHealth {
+  failingSources: number;
+  failedItems: number;
+  orphans: number;
+}
+
 export interface StateCount { state: string; count: number; }
 export interface QueueHealthRow { stage: string; created: number; retry: number; active: number; }
 export interface PipelineItemRow {
@@ -178,4 +188,19 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
     tokens: { today: tokenSummary.today, week: tokenSummary.week, topItems, noItem },
     drift,
   };
+}
+
+export async function getPipelineHealth(): Promise<PipelineHealth> {
+  const db = getDbClient();
+  const [fs] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(sources)
+    .where(sql`coalesce(${sources.consecutiveFailures}, 0) >= ${FAILING_SOURCE_THRESHOLD}`);
+  const [fi] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(items)
+    .where(eq(items.state, 'failed'));
+  // Reuse the panel's orphan query; the banner only needs ">0", so length is enough.
+  const orphans = (await getOrphans()).length;
+  return { failingSources: fs?.n ?? 0, failedItems: fi?.n ?? 0, orphans };
 }

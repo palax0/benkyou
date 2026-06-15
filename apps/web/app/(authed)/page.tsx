@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { listFeed, getSourceName } from '@benkyou/core/items';
 import { ItemCard } from '@/components/ItemCard';
 import { CloseIcon, FeedIcon } from '@/components/shell/icons';
+import { PasteForm } from './items/PasteForm';
 
 const PAGE_SIZE = 30;
 
@@ -24,6 +25,10 @@ export default async function HomePage({
   return (
     <main>
       <h1 className="font-serif text-xl font-semibold tracking-tight text-ink">{t('title')}</h1>
+
+      <div className="mt-4 mb-2">
+        <PasteForm />
+      </div>
 
       {source ? (
         <div className="mt-2 flex items-center gap-2 text-sm text-muted">

@@ -5,6 +5,7 @@ import { isInitialized } from '@benkyou/core/setup';
 import { getValidSession } from '@/lib/auth';
 import { AppShell } from '@/components/shell/AppShell';
 import { ContextRail } from '@/components/shell/ContextRail';
+import { PipelineHealthBanner } from '@/components/PipelineHealthBanner';
 
 export default async function AuthedLayout({ children }: { children: ReactNode }) {
   if (!(await isInitialized())) redirect('/setup');
@@ -16,6 +17,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
       initialRailHidden={store.get('bk_rail')?.value === 'hidden'}
       rail={<ContextRail />}
     >
+      <PipelineHealthBanner />
       {children}
     </AppShell>
   );

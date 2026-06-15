@@ -26,26 +26,29 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.0",
+    "@mozilla/readability": "^0.6.0",
     "@node-rs/argon2": "^2.0.2",
     "ai": "^6.0.0",
-    "@ai-sdk/anthropic": "^3.0.0",
-    "@ai-sdk/openai": "^3.0.0",
-    "@ai-sdk/google": "^3.0.0",
-    "@ai-sdk/openai-compatible": "^2.0.0",
     "drizzle-orm": "^0.45.0",
-    "postgres": "^3.4.9",
+    "jsdom": "^26.0.0",
     "pg-boss": "^12.18.0",
-    "zod": "^4.4.0",
+    "postgres": "^3.4.9",
     "rss-parser": "^3.13.0",
-    "@mozilla/readability": "^0.6.0",
-    "jsdom": "^26.0.0"
+    "turndown": "7.2.4",
+    "youtubei.js": "^17.0.1",
+    "zod": "^4.4.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "drizzle-kit": "^0.31.0",
-    "vitest": "^4.0.0",
-    "testcontainers": "^12.0.0",
     "@types/jsdom": "^21.1.7",
-    "msw": "^2.7.0"
+    "@types/node": "^22.10.0",
+    "@types/turndown": "5.0.6",
+    "drizzle-kit": "^0.31.0",
+    "msw": "^2.7.0",
+    "testcontainers": "^12.0.0",
+    "vitest": "^4.0.0"
   }
 }

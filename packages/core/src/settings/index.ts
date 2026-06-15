@@ -48,6 +48,8 @@ export interface SettingsPatch {
   embedApiKey?: string | null;
   embedModel?: string;
   embedRequestDimensions?: boolean;
+  readerBaseUrl?: string | null;
+  readerApiKey?: string | null;
   interestTags?: string[];
 }
 

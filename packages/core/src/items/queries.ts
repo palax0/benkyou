@@ -12,10 +12,13 @@ export interface FeedItem {
   sourceId: string | null;
   sourceName: string | null;
   bookmarked: boolean;
+  transcriptStatus: string;
 }
 
 export interface ItemDetail extends FeedItem {
   rawContent: string | null;
+  contentMd: string | null;
+  extractStatus: string;
   deepSummary: string | null;
   author: string | null;
   topicTags: string[] | null;
@@ -32,6 +35,7 @@ const FEED_COLUMNS = {
   bookmarked: items.bookmarked,
   sourceId: items.sourceId,
   sourceName: sources.name,
+  transcriptStatus: items.transcriptStatus,
 };
 
 export async function listFeed(opts: {
@@ -92,6 +96,8 @@ export async function getItemForUser(id: string): Promise<ItemDetail | null> {
     .select({
       ...FEED_COLUMNS,
       rawContent: items.rawContent,
+      contentMd: items.contentMd,
+      extractStatus: items.extractStatus,
       deepSummary: items.deepSummary,
       author: items.author,
       topicTags: items.topicTags,
@@ -102,4 +108,30 @@ export async function getItemForUser(id: string): Promise<ItemDetail | null> {
     .limit(1);
   const r = rows[0];
   return r ? { ...r, bookmarked: r.bookmarked ?? false } : null;
+}
+
+export interface ItemProgress {
+  id: string;
+  title: string;
+  state: string;
+  currentStage: string | null;
+  lastError: string | null;
+  transcriptStatus: string;
+}
+
+export async function getItemProgress(id: string): Promise<ItemProgress | null> {
+  const db = getDbClient();
+  const rows = await db
+    .select({
+      id: items.id,
+      title: items.title,
+      state: items.state,
+      currentStage: items.currentStage,
+      lastError: items.lastError,
+      transcriptStatus: items.transcriptStatus,
+    })
+    .from(items)
+    .where(eq(items.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }

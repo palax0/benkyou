@@ -21,6 +21,8 @@ export interface FormValues {
   embedModel: string;
   embedRequestDimensions: boolean;
   interestTags: string;
+  readerBaseUrl: string;
+  readerApiKey: string;
 }
 
 export interface SettingsState {
@@ -43,6 +45,8 @@ const Schema = z.object({
   embedApiKey: z.string().optional(),
   embedModel: z.string().min(1),
   interestTags: z.string().optional(),
+  readerBaseUrl: z.string().optional(),
+  readerApiKey: z.string().optional(),
 });
 
 function str(fd: FormData, k: string): string | undefined {
@@ -65,6 +69,8 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     embedModel: String(fd.get('embedModel') ?? ''),
     embedRequestDimensions: fd.get('embedRequestDimensions') === 'on',
     interestTags: String(fd.get('interestTags') ?? ''),
+    readerBaseUrl: String(fd.get('readerBaseUrl') ?? ''),
+    readerApiKey: String(fd.get('readerApiKey') ?? ''),
   };
   const parsed = Schema.safeParse({
     locale: fd.get('locale'),
@@ -78,6 +84,8 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     embedApiKey: str(fd, 'embedApiKey'),
     embedModel: fd.get('embedModel'),
     interestTags: str(fd, 'interestTags'),
+    readerBaseUrl: str(fd, 'readerBaseUrl'),
+    readerApiKey: str(fd, 'readerApiKey'),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid', values };
   const v = parsed.data;
@@ -86,6 +94,7 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
   if (!current) return { error: 'notInitialized', values };
   const llmApiKey = v.llmApiKey ?? current.llmApiKey;
   const embedApiKey = v.embedApiKey ?? current.embedApiKey;
+  const readerApiKey = v.readerApiKey ?? current.readerApiKey;
 
   const llmCfg = { provider: v.llmProvider, baseUrl: v.llmBaseUrl, apiKey: llmApiKey ?? undefined, model: v.llmModel };
   const embedCfg = {
@@ -117,6 +126,8 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     embedModel: v.embedModel,
     embedRequestDimensions: requestDimensions,
     interestTags: (v.interestTags ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    readerBaseUrl: v.readerBaseUrl ?? null,
+    readerApiKey,
   });
   revalidatePath('/settings');
   return { ok: true };

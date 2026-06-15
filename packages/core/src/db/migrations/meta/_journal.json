@@ -29,6 +29,27 @@
       "when": 1781114613904,
       "tag": "0003_flaky_darkhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781432295464,
+      "tag": "0004_lowly_morbius",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781432543396,
+      "tag": "0005_large_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781467675056,
+      "tag": "0006_condemned_jack_power",
+      "breakpoints": true
     }
   ]
 }

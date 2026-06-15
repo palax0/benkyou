@@ -94,6 +94,7 @@ Benkyou 是一个开源、自部署的个人 AI 资讯聚合平台，目标是**
 - 社交分享 / 评论
 - 离线模式
 - 原生移动端 app（响应式 web 已覆盖）
+- **浏览器插件**（postponed）——对受保护页面（Medium / Cloudflare / 付费墙）的"粘贴正文"入口是独立待议的 mini-spec，不在当前设计范围。**本设计对受保护页面的立场是优雅降级**：摘要 + 原文链接 + 诚实标注，而非强行抓取或绕墙。
 
 ---
 
@@ -263,7 +264,7 @@ items
   content_type    text not null                                    -- 'article' | 'video' | 'discussion' | 'paper'
   raw_content     text                                             -- 正文 / 字幕 / 转写
   transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'skipped_serverless' | 'unavailable'
-  transcript_segments jsonb                                        -- 视频说话人分段（如果可用）
+  transcript_segments jsonb                                        -- timed transcript segments [{ start, end, text, speaker? }]；speaker 可选
   video_duration  int                                              -- 秒，仅视频
   video_kind      text                                             -- 'auto' | 'interview' | 'tutorial' | 'talk' | 'other'
   summary         text                                             -- 1-2 句轻量摘要
@@ -448,10 +449,11 @@ ingest → extract → embed → score → dedup → summary → (done)
 
 extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的 `extract(item)`，平台特定逻辑（字幕 API、Readability、HTML 抓取）全部住在 `packages/core/src/sources/<type>.ts`——否则每加一种源都要改 pipeline，M2 的三种新源会把 extract 变成上帝函数。
 
-- **RSS**：feed 里有 `content:encoded` 全文用之；只有 description 的，fetch HTML + Mozilla Readability 提取正文
+- **RSS**：feed 里有 `content:encoded` 全文用之；只有 description 的，fetch HTML + Mozilla Readability 提取正文。文章抽取**降级 + 记录 `extract_status`**（不阻塞 pipeline）：直连/reader 任何失败 → catch、写 `extract_status`、继续——绝不 throw 让 item 进 `failed`。
 - **HN/Reddit**（v2）：调官方 JSON API 拿 story + 前 N 个评论
 - **YouTube**：先调字幕 API；有字幕直接存入 `raw_content`，并尝试解析说话人（若 API 提供）
-- **Bilibili**：调 Bilibili 字幕 API（公开）
+- **Bilibili**：调 Bilibili 字幕 API（**M2a 范围：限免登录字幕**——wbi 逐请求签名，需登录 cookie 的字幕降级为 `unavailable`，不存任何凭证；完整 cookie 支持显式不做）
+- **字幕抓取降级契约（M2a）**：YouTube / Bilibili 任何字幕抓取异常一律 catch → `transcript_status='unavailable'` + 继续 pipeline（用 title+metadata embed/score），**绝不 throw 让 item 进 `failed`**——scrape 源 fragile，缺字幕/被挡是常态不是错误（真正的瞬时错误如网络 5xx 仍可 throw 让 pg-boss 重试）
 - **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。转写决策（给定 duration + 来源类型 + 部署模式 → skip / confirm / transcribe）是 **core 的一个纯函数**（`pipeline/transcribe-policy.ts`），worker 的自动源路径与 web 的手动粘贴路径调同一份——这个策略天然横跨两层，不抽出来就会在 `apps/web` 和 `pipeline/extract` 各长一份：
   - `DEPLOY_MODE=serverless` → `transcript_status='skipped_serverless'`，**继续后续 pipeline**（serverless 不支持转写，见 §11.2）
   - 自动源 + `duration > video_auto_limit` → `transcript_status='skipped_too_long'`，`raw_content=null`，**继续后续 pipeline**（embed/score 只用 title + metadata；UI 显示"未转写"badge，用户可手动批准）
@@ -460,12 +462,25 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
   - 其他情况 → 入队 `transcribe:item_id` 子任务（`transcript_status='pending'`）
 - **临时粘贴 URL**：识别是否为视频域名，分别走视频/文章路径
 
+**文章抽取详情（M2a，`resolveContent` 三段回退链）**：
+
+- **双存储正文**：`raw_content`（纯文本，由 `stripMarkdown(md)` 派生）供搜索/embedding/summary 消费，保持不动；新增 `content_md`（markdown，Jina 原生返回 / HTML 经 turndown 转换）仅供展示，`NULL` 时 UI fallback 到 `raw_content`。`search_vec` 生成列、embedding 等硬不变量全围绕 `raw_content`，零改动。
+- **`extract_status` 枚举**（与 `transcript_status` 平行，仅文章使用；视频走 `transcript_status`）：
+  - `ok` — 没有"需要的增强步骤"失败：feed 自带正文已达阈值，**或**直连/reader 成功返回（即便结果较短——合法短文也是 `ok`）
+  - `blocked` — HTTP 403 或 Cloudflare 挑战（`cf-mitigated` 等）
+  - `fetch_failed` — 网络错误 / 5xx / 抛异常
+  - `empty_parse` — 抓到页面但 Readability 解析为空（典型 SPA / 客户端渲染）
+
+  失败间优先级（`lastFail` 合并逻辑）：`blocked` > `empty_parse` > `fetch_failed`。
+- **Reader 回退契约**：`GET {reader_base_url}/{targetUrl}`，可选 `Authorization: Bearer`（Jina 约定）。`targetUrl` 保留完整 query string。仅在 `reader_base_url` 已配置 **且** 直连失败或结果不足阈值时触发，作为**最后兜底**（last resort）。不抛错：HTTP 403/挑战 → `blocked`；网络/5xx/异常 → `fetch_failed`；200 但空 → `empty_parse`。
+- **`FULLTEXT_MIN_CHARS` 阈值（600）**：判断依据为 candidate markdown 的**纯文本长度**（`stripMarkdown(md).length`），而非 markdown 字符串长度——内联链接/追踪 URL 不得虚增长度、绕过真正抓取。**注：此为对 detail design §5.2 "markdown 长度（可接受）"的明确修正，以本条为准。** 同一纯文本基准也用于多段候选间的最优选取。
+
 `transcribe` 子任务：
 - 用 ffmpeg 提音频（短视频可跳过，直接送音频 URL）
 - 长视频切 10min chunk，5s overlap
 - 并发调 Whisper endpoint，**并发上限 3**（p-limit；无上限的 `Promise.all` 在 3h 视频 ≈ 18 chunk 时会撞 endpoint rate limit）
 - 合并 transcripts，处理 chunk 边界（用 overlap 内的相似度对齐）
-- 若 endpoint 返回 speaker labels（如 Deepgram），存入 `transcript_segments` jsonb；否则 `raw_content` 存纯文本
+- transcribe **始终**写入 timed `transcript_segments` `[{ start, end, text, speaker? }]`（与 M2a 字幕 adapter 同契约）；`speaker` 仅在 endpoint 返回 diarization labels（如 Deepgram）时填充。`raw_content` 同时存扁平化纯文本
 - 完成 → `transcript_status='present'`；失败超 max attempts → `transcript_status='unavailable'`（继续 embed/score 用 title）
 
 **转写与状态机的归属（关键决策，M2 前定死）**：走转写路径的 item，在 transcribe 得出终态（`present` / `unavailable`）之前 **state 停留在 `pending`** —— "extract 成功"的定义**包含转写完成**，由 transcribe 子任务在到达终态时推进 `state='extracted'` 并入队 embed。理由：embed/score/summary 都消费 `raw_content`；若 extract 先行推进，转写到货后内容已无重跑路径——runner 的 at-least-once 状态守卫（§6.1）会丢弃任何回流 job，这个守卫不能为转写开洞。被否决的备选：(a) 显式回流 re-embed——状态守卫要加例外规则，复杂度上升且引入"done 之后内容变化"的不一致窗口；(b) 转写不参与 AI 链——视频内容不可搜索、不参与评分，产品价值打折。代价与配套：extract 对长视频是分钟级 stage，`transcribe` 队列的 pg-boss 超时（`expireInSeconds`）须按 `video_manual_limit` 推算放宽；其重试计数独立于 extract（`transcript_status` 的 pending→unavailable 由 transcribe 自己的 max attempts 驱动，items.attempts 不混用）。
@@ -927,7 +942,8 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 | M0 · 骨架 | pnpm monorepo、DB schema（11 张表，含状态机字段）、Drizzle migrations、Docker Compose、CI（lint/typecheck/test）、Vercel AI SDK 接入、i18n 框架（next-intl） |
 | M1 · 端到端最小闭环 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
 | M1c · 可观测性 & 源管理 | `ai_usage` token 账本 + 四处真实 AI 调用埋点（embed / score / summary / deep_summary）；`/admin/jobs` 六段式 pipeline 面板（状态分布 / 队列健康 + 孤儿 / 处理中 / 失败 / token 消耗 / 维度漂移）+ 失败与孤儿重试；`/sources` 增删改查 + 每源拉取状态（`last_fetch_error`）+ 立即抓取；feed 卡片来源徽章 → 每源筛选；setup/settings 表单校验失败时保留已填输入。 |
-| M2 · 源拓展 | YouTube 字幕 / Bilibili 字幕 / 视频转写（含 chunked + diarization 解析；状态机归属见 §6.2，serverless 边界见 §11.2）/ 临时 URL 粘贴（重复 URL 跳转、stage 级进度）/ transcript_status 各分支 / pipeline 故障 banner。**前置 migration**：search_vec 截断（§5.3）、ai_usage 扩展（conversation_id / kind / duration_seconds）、sources.consecutive_failures |
+| M2a · 字幕源 & 粘贴 | YouTube 字幕 / Bilibili 字幕（**限免登录字幕**；抓取失败 → `transcript_status='unavailable'` + 继续 pipeline，绝不 fail item）/ `SourceAdapter.extract()` 重构（extract stage 变纯 dispatcher，§6.2）/ 临时 URL 粘贴（重复 URL 跳转、stage 级进度）/ transcript_status badges / pipeline 故障 banner（源连续失败 + failed items + orphans 整体健康）。**前置 migration**：search_vec 截断（§5.3）、sources.consecutive_failures。**不碰 runner/状态机**：带字幕视频走同步 `extract→extracted`；无字幕视频 M2a 暂以 `unavailable` 继续(M2b 转正，不回填)。详见 `specs/2026-06-14-benkyou-m2a-design.md` |
+| M2b · 无字幕转写 | 视频转写（chunked + diarization 解析；状态机归属见 §6.2，serverless 边界见 §11.2）/ runner 延迟推进 seam（transcribe 为唯一 consumer 与验证）/ transcribe 队列双 dispatcher 接线 + 面板可见 / transcribe-policy 的 transcribe/confirm/`skipped_serverless` 分支 / 粘贴的"确认转写 + 预估时长"子流程。**前置**：ai_usage 扩展（conversation_id / kind='transcription' / duration_seconds）+ 记账收口到 `core/ai` 封装层（删调用点埋点防双计，§5.3）。开放决策(seam 形状 / 重试计数器归属)留 M2b brainstorm |
 | M3 · AI 全开 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类（队列并发=1，§6.2）、日报生成（user_settings.timezone 定日界）、视频类型 prompt 分支、final_score 抽单一实现（§6.3）、模型漂移检测（§6.4） |
 | M4 · Agent | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
 | M5 · Onboarding 打磨 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |

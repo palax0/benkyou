@@ -59,14 +59,41 @@
     "requestDimensionsHelp": "For high-dim models, check this to request {dim}-dim vectors. The model must support dimensions / Matryoshka truncation.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}",
-    "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}."
+    "dimMismatch": "Embedding dim {got} != frozen {want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}.",
+    "readerSection": "Reader endpoint (fallback)",
+    "readerBaseUrlPlaceholder": "Reader base URL (e.g. https://r.jina.ai), blank to disable",
+    "readerApiKeyPlaceholder": "Reader API key (optional)",
+    "readerApiKeyConfigured": "Reader API key saved — leave blank to keep"
+  },
+  "paste": {
+    "placeholder": "Paste an article or video URL…",
+    "submit": "Add",
+    "failed": "Couldn't add that link",
+    "title": "Add link"
   },
   "item": {
     "deepSummary": "AI deep summary",
     "generating": "Generating…",
     "noSummary": "No summary",
     "original": "Original",
-    "noContent": "No content"
+    "noContent": "No content",
+    "processingTitle": "Processing…",
+    "processingStage": "Current stage: {stage}",
+    "processingFailed": "Failed at {stage}",
+    "extractMissing": "Full text not fetched ({reason})",
+    "extractPartial": "Full text may be incomplete ({reason})",
+    "summaryTitleOnly": "From title only",
+    "extractReason": {
+      "blocked": "blocked by the site",
+      "fetch_failed": "fetch failed",
+      "empty_parse": "no readable content"
+    },
+    "transcript": {
+      "present": "Subtitles",
+      "unavailable": "No subtitles",
+      "pending": "Transcribing",
+      "na": ""
+    }
   },
   "search": {
     "title": "Search",
@@ -154,6 +181,12 @@
     "drift": "Dimension drift",
     "driftOk": "✓ Dimensions consistent ({dim})",
     "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim."
+  },
+  "banner": {
+    "failingSources": "{n} source(s) failing to fetch",
+    "failedItems": "{n} item(s) failed to process",
+    "orphans": "{n} task(s) appear lost",
+    "cta": "View"
   },
   "shell": {
     "skipToContent": "Skip to content",
