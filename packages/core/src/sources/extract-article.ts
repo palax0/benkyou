@@ -15,15 +15,23 @@ export async function fetchReadable(url: string): Promise<FetchOutcome> {
   }
   if (res.status === 403 || res.headers.has('cf-mitigated')) return { ok: false, reason: 'blocked' };
   if (!res.ok) return { ok: false, reason: 'fetch_failed' };
-  const html = await res.text();
-  const dom = new JSDOM(html, { url });
-  const article = new Readability(dom.window.document).parse();
-  const contentHtml = article?.content?.trim(); // .content (HTML) not .textContent — design §5.2 step 2
-  if (!contentHtml) return { ok: false, reason: 'empty_parse' };
-  const markdown = htmlToMarkdown(contentHtml);
-  if (markdown.length === 0) return { ok: false, reason: 'empty_parse' };
-  const title = article?.title?.trim() || null; // refines a URL-placeholder title (extract.ts)
-  return { ok: true, markdown, title };
+  // Body read, JSDOM, Readability and turndown can all throw on pathological pages.
+  // Article extraction degrades (writes extract_status) — it must NOT throw into
+  // pg-boss retry (design §5.4). A genuine empty parse is 'empty_parse'; an exception
+  // is 'fetch_failed'.
+  try {
+    const html = await res.text();
+    const dom = new JSDOM(html, { url });
+    const article = new Readability(dom.window.document).parse();
+    const contentHtml = article?.content?.trim(); // .content (HTML) not .textContent — design §5.2 step 2
+    if (!contentHtml) return { ok: false, reason: 'empty_parse' };
+    const markdown = htmlToMarkdown(contentHtml);
+    if (markdown.length === 0) return { ok: false, reason: 'empty_parse' };
+    const title = article?.title?.trim() || null; // refines a URL-placeholder title (extract.ts)
+    return { ok: true, markdown, title };
+  } catch {
+    return { ok: false, reason: 'fetch_failed' };
+  }
 }
 
 // Below this many chars of PLAIN TEXT (stripMarkdown of the candidate, so link URLs /

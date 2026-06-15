@@ -19,7 +19,14 @@ export async function fetchViaReader(
   }
   if (res.status === 403 || res.headers.has('cf-mitigated')) return { ok: false, reason: 'blocked' };
   if (!res.ok) return { ok: false, reason: 'fetch_failed' };
-  const markdown = (await res.text()).trim();
+  // Body read can still throw (truncated stream / decode error). Article extraction
+  // must degrade, never throw into pg-boss retry (design §5.1 "never throws").
+  let markdown: string;
+  try {
+    markdown = (await res.text()).trim();
+  } catch {
+    return { ok: false, reason: 'fetch_failed' };
+  }
   if (markdown.length === 0) return { ok: false, reason: 'empty_parse' };
   return { ok: true, markdown };
 }

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import { fetchViaReader } from '../../src/sources/reader.js';
@@ -69,5 +69,20 @@ describe('fetchViaReader', () => {
   test('200 but empty body → empty_parse', async () => {
     server.use(http.get(`${BASE}/*`, () => new HttpResponse('   ', {})));
     expect(await fetchViaReader(TARGET, { baseUrl: BASE })).toEqual({ ok: false, reason: 'empty_parse' });
+  });
+
+  test('200 but body read rejects → fetch_failed (degrade, never throw)', async () => {
+    const fake = {
+      status: 200,
+      ok: true,
+      headers: new Headers(),
+      text: () => Promise.reject(new Error('stream aborted')),
+    } as unknown as Response;
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(fake);
+    try {
+      expect(await fetchViaReader(TARGET, { baseUrl: BASE })).toEqual({ ok: false, reason: 'fetch_failed' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

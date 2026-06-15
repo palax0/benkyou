@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import { extractArticle, fetchReadable, resolveContent } from '../../src/sources/extract-article.js';
@@ -57,6 +57,23 @@ describe('fetchReadable', () => {
     const r = await fetchReadable('https://site.test/article');
     expect(r.ok).toBe(true);
     if (r.ok) expect(typeof r.title === 'string' && r.title.length > 0).toBe(true);
+  });
+
+  test('body-read / parse exception → fetch_failed (degrade, never throw into retry)', async () => {
+    // A 200 response whose body read rejects (truncated stream) must not escape as a
+    // thrown error — extraction degrades to fetch_failed (design §5.4).
+    const fake = {
+      status: 200,
+      ok: true,
+      headers: new Headers(),
+      text: () => Promise.reject(new Error('stream aborted')),
+    } as unknown as Response;
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(fake);
+    try {
+      expect(await fetchReadable('https://site.test/article')).toEqual({ ok: false, reason: 'fetch_failed' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
