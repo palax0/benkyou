@@ -1,6 +1,6 @@
 import type { ExtractInput, ExtractResult, SourceAdapter, TranscriptSegment } from './types';
 import { TransientFetchError } from './types';
-import { Innertube } from 'youtubei.js';
+import { Innertube, Utils } from 'youtubei.js';
 
 // Internal contract between the fragile network edge and the pure transform.
 // null  = definitive miss (no captions / video unavailable) → degrade to 'unavailable'.
@@ -63,6 +63,15 @@ function unavailable(durationSeconds: number | null, title?: string | null): Ext
   };
 }
 
+// youtubei.js raises InnertubeError (incl. ParsingError / MissingParamError /
+// OAuth2Error) and PlayerError for content/playability problems — the video is
+// unavailable / private / removed / undecipherable. Those are DEFINITIVE misses:
+// degrade to 'unavailable', do not burn the retry budget. A raw network / handshake
+// failure (or a SessionError) is none of these → transient → pg-boss retries.
+export function isDefinitiveYoutubeError(err: unknown): boolean {
+  return err instanceof Utils.InnertubeError || err instanceof Utils.PlayerError;
+}
+
 export function createYoutubeAdapter(fetchSubtitle: FetchYoutubeSubtitle): SourceAdapter {
   return {
     type: 'youtube',
@@ -116,16 +125,23 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
     const yt = await getInnertube();
     info = await yt.getInfo(videoId);
   } catch (err) {
-    // Network/handshake failures are transient → retry. (A private/removed video
-    // also throws here; treating it as transient costs at most pipeline_max_attempts
-    // retries before the item degrades on the dispatcher's non-transient path. We
-    // keep the simple rule rather than string-matching youtubei.js error messages.)
+    // A definitive content error (unavailable / private / removed) degrades — retrying
+    // can never recover it and would only burn pipeline_max_attempts → state='failed'.
+    // Only genuine transient failures (network / handshake) retry (design §2 contract).
+    if (isDefinitiveYoutubeError(err)) return { durationSeconds: null, title: null, cues: [] };
     throw new TransientFetchError(err instanceof Error ? err.message : String(err));
   }
 
   // basic_info.duration is number | undefined per youtubei.js v17 MediaInfo types.
   const durationSeconds = info.basic_info.duration ?? null;
   const title = info.basic_info.title ?? null;
+
+  // Private / login-required / region-locked / removed videos often resolve (no throw)
+  // but report a non-OK playability status; there are no captions to fetch → degrade,
+  // keeping the title we did get.
+  if (info.playability_status?.status && info.playability_status.status !== 'OK') {
+    return { durationSeconds, title, cues: [] };
+  }
 
   let transcript;
   try {

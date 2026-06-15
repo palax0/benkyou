@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { parseYoutubeVideoId, createYoutubeAdapter, type RawSubtitleTrack } from '../../src/sources/youtube.js';
+import { Utils } from 'youtubei.js';
+import {
+  parseYoutubeVideoId,
+  createYoutubeAdapter,
+  isDefinitiveYoutubeError,
+  type RawSubtitleTrack,
+} from '../../src/sources/youtube.js';
 import { TransientFetchError } from '../../src/sources/types.js';
 
 describe('parseYoutubeVideoId', () => {
@@ -105,5 +111,18 @@ describe('youtube adapter extract', () => {
   test('fetchItems throws (youtube is adhoc-only in M2a)', async () => {
     const adapter = createYoutubeAdapter(async () => null);
     await expect(adapter.fetchItems({})).rejects.toThrow(/adhoc/);
+  });
+});
+
+describe('isDefinitiveYoutubeError', () => {
+  test('youtubei.js content errors (unavailable/private/removed) are definitive → degrade', () => {
+    expect(isDefinitiveYoutubeError(new Utils.InnertubeError('This video is unavailable'))).toBe(true);
+    expect(isDefinitiveYoutubeError(new Utils.PlayerError('decipher failed'))).toBe(true);
+  });
+
+  test('network / unknown errors are NOT definitive → transient retry', () => {
+    expect(isDefinitiveYoutubeError(new TypeError('fetch failed'))).toBe(false);
+    expect(isDefinitiveYoutubeError(new Error('ETIMEDOUT'))).toBe(false);
+    expect(isDefinitiveYoutubeError('weird')).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parseBilibiliId, createBilibiliAdapter } from '../../src/sources/bilibili.js';
+import { parseBilibiliId, createBilibiliAdapter, biliStatusDisposition } from '../../src/sources/bilibili.js';
 import type { RawSubtitleTrack } from '../../src/sources/youtube.js';
 import { TransientFetchError } from '../../src/sources/types.js';
 
@@ -74,5 +74,19 @@ describe('bilibili adapter extract', () => {
   test('fetchItems throws (adhoc-only)', async () => {
     const adapter = createBilibiliAdapter(async () => null);
     await expect(adapter.fetchItems({})).rejects.toThrow(/adhoc/);
+  });
+});
+
+describe('biliStatusDisposition', () => {
+  test('5xx → transient (retry)', () => {
+    expect(biliStatusDisposition(500)).toBe('transient');
+    expect(biliStatusDisposition(503)).toBe('transient');
+  });
+  test('4xx → miss (degrade, do not retry)', () => {
+    expect(biliStatusDisposition(403)).toBe('miss');
+    expect(biliStatusDisposition(404)).toBe('miss');
+  });
+  test('2xx → ok', () => {
+    expect(biliStatusDisposition(200)).toBe('ok');
   });
 });

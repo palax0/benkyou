@@ -78,10 +78,26 @@ const BILI_HEADERS = {
   referer: 'https://www.bilibili.com/',
 };
 
+// Classify a bilibili HTTP status. 5xx = transient (retry); 4xx = the resource can't
+// be read anonymously (private / removed / login-walled) = a definitive miss → degrade.
+// Only the adapter's TransientFetchError path retries; a plain throw degrades (design §2).
+export function biliStatusDisposition(status: number): 'ok' | 'transient' | 'miss' {
+  if (status >= 500) return 'transient';
+  if (status >= 400) return 'miss';
+  return 'ok';
+}
+
 async function biliJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: BILI_HEADERS });
-  if (res.status >= 500) throw new TransientFetchError(`bilibili ${res.status}`);
-  if (!res.ok) throw new TransientFetchError(`bilibili ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: BILI_HEADERS });
+  } catch (err) {
+    // Network failure is genuinely transient → retry.
+    throw new TransientFetchError(`bilibili network: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const disposition = biliStatusDisposition(res.status);
+  if (disposition === 'transient') throw new TransientFetchError(`bilibili ${res.status}`);
+  if (disposition === 'miss') throw new Error(`bilibili ${res.status}`); // → adapter degrades
   return (await res.json()) as T;
 }
 
