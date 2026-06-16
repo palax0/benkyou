@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import type { PgBoss } from 'pg-boss';
 import postgres from 'postgres';
 
 describe('registerQueues', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let boss: PgBoss;
   let registerQueues: (boss: PgBoss) => Promise<void>;
@@ -13,21 +13,8 @@ describe('registerQueues', () => {
   let closeBoss: () => Promise<void>;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('queue/queues.int.test');
+    sql = db.sql;
 
     const queue = await import('../../src/queue/index.js');
     registerQueues = queue.registerQueues;
@@ -41,8 +28,7 @@ describe('registerQueues', () => {
   afterAll(async () => {
     await closeBoss?.();
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('creates queues with default retryLimit 3 when user_settings is absent', async () => {

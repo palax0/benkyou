@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import postgres from 'postgres';
@@ -38,7 +38,7 @@ const server = setupServer(
 );
 
 describe('full pipeline: pending → done', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let processBatch: (n: number) => Promise<{ processed: number; errors: number }>;
   let closeBoss: () => Promise<void>;
@@ -46,23 +46,11 @@ describe('full pipeline: pending → done', () => {
 
   beforeAll(async () => {
     server.listen({ onUnhandledRequest: 'bypass' });
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
     // Set env BEFORE importing any core module (env.ts reads process.env at load).
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
+    db = await createMigratedTestDatabase('pipeline/pipeline.int.test');
     process.env.DEPLOY_MODE = 'serverless';
 
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-
-    sql = postgres(url);
+    sql = db.sql;
     await sql`INSERT INTO user_settings
       (id, password_hash, embed_dim, locale, llm_provider, llm_model, llm_cheap_model, embed_provider, embed_model, interest_tags)
       VALUES (1, 'x', 1536, 'en', 'openai', 'gpt-x', 'gpt-x-mini', 'openai', 'emb-x', ARRAY['llm'])`;
@@ -77,8 +65,7 @@ describe('full pipeline: pending → done', () => {
   afterAll(async () => {
     await closeBoss?.();
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
     server.close();
   });
 

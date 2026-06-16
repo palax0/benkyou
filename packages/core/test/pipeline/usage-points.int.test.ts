@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
 vi.mock('ai', () => ({
@@ -18,7 +18,7 @@ vi.mock('ai', () => ({
 }));
 
 describe('AI call sites record usage', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let embedItem: (id: string) => Promise<void>;
   let scoreItem: (id: string) => Promise<void>;
@@ -26,18 +26,8 @@ describe('AI call sites record usage', () => {
   let closeDbClient: () => Promise<void>;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('pipeline/usage-points.int.test');
+    sql = db.sql;
     await sql`INSERT INTO user_settings
       (id, password_hash, embed_dim, locale, llm_provider, llm_model, llm_cheap_model, embed_provider, embed_model, interest_tags)
       VALUES (1,'x',1536,'en','openai','gpt-x','gpt-x-mini','openai','emb-x',ARRAY['llm'])`;
@@ -49,8 +39,7 @@ describe('AI call sites record usage', () => {
 
   afterAll(async () => {
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   async function seedItem(state: string): Promise<string> {

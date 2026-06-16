@@ -1,29 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
 describe('search_vec truncation', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('db/search-vec-truncation.int.test');
+    sql = db.sql;
   }, 120_000);
 
   afterAll(async () => {
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('an over-1MB raw_content inserts without a tsvector size error', async () => {

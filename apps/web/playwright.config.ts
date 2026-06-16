@@ -41,7 +41,9 @@ export default defineConfig({
       // and Playwright starts webServer entries before globalSetup, so the e2e
       // database may not exist yet at probe time.
       url: 'http://localhost:3000/health',
-      reuseExistingServer: !process.env.CI,
+      // Do not reuse a developer-run Next server: it may be connected to the
+      // dev database instead of the isolated e2e database below.
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         DATABASE_URL,
