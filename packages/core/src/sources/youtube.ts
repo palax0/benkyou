@@ -112,10 +112,17 @@ export function createYoutubeAdapter(fetchSubtitle: FetchYoutubeSubtitle): Sourc
   };
 }
 
+// retrieve_player MUST stay true. With retrieve_player:false, YouTube reports some
+// playable, captioned videos as playability=UNPLAYABLE ("Video unavailable / The page
+// needs to be reloaded") — which hides the caption tracks and degrades the item to
+// 'unavailable' even though it has subtitles. Retrieving the player costs an extra
+// handshake but is required for playability to resolve to OK. (Regression-tested.)
+export const INNERTUBE_OPTIONS = { retrieve_player: true } as const;
+
 let innertube: Promise<Innertube> | null = null;
 function getInnertube(): Promise<Innertube> {
   // Lazy singleton: Innertube.create() does a network handshake; build it once.
-  innertube ??= Innertube.create({ retrieve_player: false });
+  innertube ??= Innertube.create(INNERTUBE_OPTIONS);
   return innertube;
 }
 
@@ -140,14 +147,24 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
   // but report a non-OK playability status; there are no captions to fetch → degrade,
   // keeping the title we did get.
   if (info.playability_status?.status && info.playability_status.status !== 'OK') {
+    console.warn(
+      `[youtube] ${videoId} degraded: playability=${info.playability_status.status}` +
+        ` reason=${JSON.stringify(info.playability_status.reason ?? null)}`,
+    );
     return { durationSeconds, title, cues: [] };
   }
 
   let transcript;
   try {
     transcript = await info.getTranscript();
-  } catch {
-    // No transcript panel = definitively no captions → degrade.
+  } catch (err) {
+    // No transcript panel = definitively no captions. NB: YouTube's anti-bot hardening
+    // also surfaces here (get_transcript 400 / empty timedtext without a PoToken), so a
+    // captioned video can still land in this branch — log the reason to tell the cases
+    // apart instead of silently reporting "no subtitles".
+    console.warn(
+      `[youtube] ${videoId} degraded: getTranscript failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { durationSeconds, title, cues: [] };
   }
 
