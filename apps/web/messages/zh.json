@@ -188,6 +188,15 @@
     "orphans": "{n} 条任务疑似丢失",
     "cta": "查看"
   },
+  "pipeline": {
+    "fetch": "抓取",
+    "extract": "提取",
+    "embed": "嵌入",
+    "score": "打分",
+    "done": "完成",
+    "failedAt": "在「{step}」失败",
+    "retry": "重试"
+  },
   "shell": {
     "skipToContent": "跳到正文",
     "mainNav": "主导航",

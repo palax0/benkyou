@@ -1,11 +1,12 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { getItemForUser, getItemProgress } from '@benkyou/core/items';
+import { getItemForUser, getItemProgress, mapStep } from '@benkyou/core/items';
 import { DeepSummary } from '@/components/DeepSummary';
 import { AutoRefresh } from '@/components/AutoRefresh';
 import { TranscriptBadge } from '@/components/TranscriptBadge';
 import { ArticleBody } from '@/components/ArticleBody';
 import { ExtractNotice, SummaryBasisBadge } from '@/components/ExtractNotice';
+import { PipelineStepper } from '@/components/PipelineStepper';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,6 +17,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
     // Not done yet (or doesn't exist) — show pipeline progress if it exists.
     const progress = await getItemProgress(id);
     if (!progress) notFound();
+    const view = mapStep(progress.state, progress.currentStage, progress.transcriptStatus, progress.lastError);
     return (
       <main className="flex flex-col gap-4">
         <header className="flex items-center justify-between">
@@ -24,14 +26,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
           </h1>
           <AutoRefresh />
         </header>
-        <p className="text-sm text-muted">
-          {progress.state === 'failed'
-            ? t('processingFailed', { stage: progress.currentStage ?? '' })
-            : t('processingStage', { stage: progress.currentStage ?? progress.state })}
-        </p>
-        {progress.state === 'failed' && progress.lastError ? (
-          <pre className="whitespace-pre-wrap text-xs text-muted">{progress.lastError}</pre>
-        ) : null}
+        <p className="text-sm text-muted">{progress.title}</p>
+        <PipelineStepper view={view} lastError={progress.lastError} itemId={progress.id} />
       </main>
     );
   }

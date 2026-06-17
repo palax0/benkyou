@@ -188,6 +188,15 @@
     "orphans": "{n} task(s) appear lost",
     "cta": "View"
   },
+  "pipeline": {
+    "fetch": "Fetch",
+    "extract": "Extract",
+    "embed": "Embed",
+    "score": "Score",
+    "done": "Done",
+    "failedAt": "Failed at {step}",
+    "retry": "Retry"
+  },
   "shell": {
     "skipToContent": "Skip to content",
     "mainNav": "Main navigation",
