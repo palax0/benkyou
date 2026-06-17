@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
 type ItemsModule = typeof import('../../src/items/index.js');
@@ -7,24 +7,14 @@ type ItemsModule = typeof import('../../src/items/index.js');
 const SOURCE = '44444444-4444-4444-4444-444444444444';
 
 describe('getTodayStats', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let items: ItemsModule;
   let closeDbClient: () => Promise<void>;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('items/today-stats.int.test');
+    sql = db.sql;
 
     await sql`INSERT INTO sources (id, type, name, config) VALUES
       (${SOURCE}, 'rss', 'Feed', '{"url":"https://x.example.com"}')`;
@@ -42,8 +32,7 @@ describe('getTodayStats', () => {
 
   afterAll(async () => {
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('counts today vs cumulative buckets correctly', async () => {

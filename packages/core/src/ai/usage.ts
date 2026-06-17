@@ -13,6 +13,10 @@ export interface UsageFields {
   totalTokens: number | null;
 }
 
+function finiteOrNull(value: number | null): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 /**
  * Best-effort token ledger write (spec §7): a failure here is logged and
  * swallowed — it must never break the pipeline stage that produced the usage.
@@ -25,9 +29,9 @@ export async function recordUsage(ctx: UsageContext, fields: UsageFields): Promi
       stage: ctx.stage,
       kind: fields.kind,
       model: fields.model,
-      inputTokens: fields.inputTokens,
-      outputTokens: fields.outputTokens,
-      totalTokens: fields.totalTokens,
+      inputTokens: finiteOrNull(fields.inputTokens),
+      outputTokens: finiteOrNull(fields.outputTokens),
+      totalTokens: finiteOrNull(fields.totalTokens),
     });
   } catch (err) {
     console.error('[ai_usage] record failed:', err instanceof Error ? err.message : err);

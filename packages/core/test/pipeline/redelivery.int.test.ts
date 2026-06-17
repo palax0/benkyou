@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import type { PgBoss } from 'pg-boss';
 import postgres from 'postgres';
 import type { PerItemStage } from '../../src/pipeline/state.js';
@@ -17,7 +17,7 @@ import type { PerItemStage } from '../../src/pipeline/state.js';
 //      of state='failed', which the "user-visible queries filter state='done'"
 //      invariant depends on.
 describe('pipeline redelivery safety', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let dedupItem: (itemId: string) => Promise<void>;
   let runItemStage: (boss: PgBoss, job: { itemId: string; stage: PerItemStage }) => Promise<void>;
@@ -38,22 +38,9 @@ describe('pipeline redelivery safety', () => {
   }
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
+    db = await createMigratedTestDatabase('pipeline/redelivery.int.test');
     process.env.DEPLOY_MODE = 'serverless';
-
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-
-    sql = postgres(url);
+    sql = db.sql;
     ({ dedupItem } = await import('../../src/pipeline/dedup.js'));
     ({ runItemStage, handleDeadLetter } = await import('../../src/queue/runner.js'));
     ({ closeDbClient } = await import('../../src/db/client.js'));
@@ -61,8 +48,7 @@ describe('pipeline redelivery safety', () => {
 
   afterAll(async () => {
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('dedupItem twice yields exactly one cluster (idempotent on canonical_item)', async () => {

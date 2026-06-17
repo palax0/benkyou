@@ -1,27 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
 describe('getPipelineHealth', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let getPipelineHealth: typeof import('../../src/pipeline/status.js')['getPipelineHealth'];
   let closeDbClient: () => Promise<void>;
   let closeBoss: () => Promise<void>;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('pipeline/health.int.test');
+    sql = db.sql;
     await sql`INSERT INTO user_settings (id, password_hash, embed_dim) VALUES (1, 'x', 1536)`;
     const { getBoss, registerQueues, closeBoss: _cb } = await import('../../src/queue/index.js');
     closeBoss = _cb;
@@ -33,8 +23,7 @@ describe('getPipelineHealth', () => {
   afterAll(async () => {
     await closeBoss?.();
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('counts failing sources (>= threshold), failed items', async () => {

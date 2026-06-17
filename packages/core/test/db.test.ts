@@ -1,49 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import {
-  GenericContainer,
-  Wait,
-  type StartedTestContainer,
-} from 'testcontainers';
-import postgres from 'postgres';
 import { runMigrations } from '../src/db/migrate.js';
+import { createEmptyTestDatabase, type TestDatabase } from './db-harness/helpers';
 
 describe('migrations apply to a fresh PG', () => {
-  let container: StartedTestContainer;
-  let url: string;
-  let sql: postgres.Sql;
+  let db: TestDatabase;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({
-        POSTGRES_USER: 'test',
-        POSTGRES_PASSWORD: 'test',
-        POSTGRES_DB: 'test',
-      })
-      .withExposedPorts(5432)
-      // Postgres opens its port briefly during init before it is truly ready;
-      // the readiness log appears twice (bootstrap, then real start), so wait
-      // for the second to avoid a "database system is starting up" race when
-      // containers spin up in parallel with other suites.
-      .withWaitStrategy(
-        Wait.forLogMessage(/database system is ready to accept connections/, 2),
-      )
-      .start();
-    const host = container.getHost();
-    const port = container.getMappedPort(5432);
-    url = `postgres://test:test@${host}:${port}/test`;
-
-    process.env.EMBED_DIM = '1536';
-    await runMigrations(url);
-    sql = postgres(url);
+    // This suite tests runMigrations itself, so it must start from an empty DB
+    // and migrate explicitly — not the pre-migrated template the other suites clone.
+    db = await createEmptyTestDatabase('db');
+    await runMigrations(db.url);
   }, 120_000);
 
   afterAll(async () => {
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('all 10 spec tables created', async () => {
-    const rows = await sql<{ table_name: string }[]>`
+    const rows = await db.sql<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
       ORDER BY table_name
@@ -67,14 +41,14 @@ describe('migrations apply to a fresh PG', () => {
   });
 
   test('pgvector extension installed', async () => {
-    const rows = await sql<{ extname: string }[]>`
+    const rows = await db.sql<{ extname: string }[]>`
       SELECT extname FROM pg_extension WHERE extname = 'vector'
     `;
     expect(rows).toHaveLength(1);
   });
 
   test('items.search_vec is a generated tsvector column', async () => {
-    const rows = await sql<{ data_type: string; is_generated: string }[]>`
+    const rows = await db.sql<{ data_type: string; is_generated: string }[]>`
       SELECT data_type, is_generated FROM information_schema.columns
       WHERE table_name = 'items' AND column_name = 'search_vec'
     `;
@@ -83,7 +57,7 @@ describe('migrations apply to a fresh PG', () => {
   });
 
   test('items has url_hash unique index', async () => {
-    const rows = await sql<{ indexname: string }[]>`
+    const rows = await db.sql<{ indexname: string }[]>`
       SELECT indexname FROM pg_indexes
       WHERE tablename = 'items' AND indexname = 'items_url_hash_uq'
     `;
@@ -91,7 +65,7 @@ describe('migrations apply to a fresh PG', () => {
   });
 
   test('HNSW indexes on item_embeddings', async () => {
-    const rows = await sql<{ indexname: string }[]>`
+    const rows = await db.sql<{ indexname: string }[]>`
       SELECT indexname FROM pg_indexes
       WHERE tablename = 'item_embeddings'
         AND indexname IN ('item_emb_hnsw', 'title_emb_hnsw')

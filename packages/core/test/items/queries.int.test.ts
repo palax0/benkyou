@@ -1,28 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
 type ItemsModule = typeof import('../../src/items/index.js');
 
 describe('item queries', () => {
-  let container: StartedTestContainer;
+  let db: TestDatabase;
   let sql: postgres.Sql;
   let items: ItemsModule;
   let closeDbClient: () => Promise<void>;
 
   beforeAll(async () => {
-    container = await new GenericContainer('pgvector/pgvector:pg16')
-      .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
-      .withExposedPorts(5432)
-      .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
-    const url = `postgres://test:test@${container.getHost()}:${container.getMappedPort(5432)}/test`;
-    process.env.DATABASE_URL = url;
-    process.env.EMBED_DIM = '1536';
-    process.env.SESSION_SECRET = 'a'.repeat(40);
-    const { runMigrations } = await import('../../src/db/migrate.js');
-    await runMigrations(url);
-    sql = postgres(url);
+    db = await createMigratedTestDatabase('items/queries.int.test');
+    sql = db.sql;
     await sql`INSERT INTO sources (id, type, name, config) VALUES
       ('11111111-1111-1111-1111-111111111111','rss','Feed','{"url":"x"}')`;
     // one done, one still pending
@@ -35,8 +25,7 @@ describe('item queries', () => {
 
   afterAll(async () => {
     await closeDbClient?.();
-    await sql?.end();
-    await container?.stop();
+    await db?.cleanup();
   });
 
   test('listFeed returns only done items, with source name', async () => {

@@ -7,6 +7,21 @@ import { hashPassword } from '@benkyou/core/auth';
 const DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? 'postgres://benkyou:benkyou@localhost:5432/benkyou_e2e';
 
+export function assertSafeE2eDatabaseUrl(databaseUrl: string): void {
+  const url = new URL(databaseUrl);
+  const databaseName = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  // Require an explicit `_e2e` suffix (case-insensitive): narrow enough that a
+  // real database (`benkyou`, `prod`, …) can't slip through, and a plain `e2e`
+  // or a `e2e_`-prefixed name (e.g. `e2e_prod`) won't be mistaken for safe.
+  const isDedicatedE2eDatabase = /_e2e$/i.test(databaseName);
+
+  if (!isDedicatedE2eDatabase) {
+    throw new Error(
+      `E2E_DATABASE_URL must point at a dedicated e2e database before truncating data; got "${databaseName || '(empty)'}"`,
+    );
+  }
+}
+
 // Creates the e2e database on a fresh postgres volume. Playwright starts the
 // webServer entries BEFORE globalSetup, so the dev server's readiness probe must
 // not depend on this having run yet (hence the DB-free /health probe in config).
@@ -31,6 +46,8 @@ async function ensureDatabaseExists(databaseUrl: string): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<void> {
+  assertSafeE2eDatabaseUrl(DATABASE_URL);
+
   // Assumes the postgres container is up (`docker compose up -d postgres`).
   // Call core migration directly rather than shelling out (avoids cwd issues in monorepo).
   process.env['DATABASE_URL'] = DATABASE_URL;
