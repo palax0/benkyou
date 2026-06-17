@@ -69,3 +69,18 @@ export async function setPasswordHash(passwordHash: string): Promise<void> {
     .set({ passwordHash, updatedAt: new Date() })
     .where(eq(userSettings.id, 1));
 }
+
+// Two derived AI-readiness states (spec §4.4), computed from existing user_settings
+// columns — no new column. bootstrapped = row exists (password set) but provider
+// unconfigured; aiConfigured = llm + embed provider+model all present.
+export type AiReadiness = 'bootstrapped' | 'aiConfigured';
+
+type ProviderFields = Pick<UserSettings, 'llmProvider' | 'llmModel' | 'embedProvider' | 'embedModel'>;
+
+export function isAiConfigured(s: ProviderFields): boolean {
+  return Boolean(s.llmProvider && s.llmModel && s.embedProvider && s.embedModel);
+}
+
+export function aiReadiness(s: ProviderFields): AiReadiness {
+  return isAiConfigured(s) ? 'aiConfigured' : 'bootstrapped';
+}
