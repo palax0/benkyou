@@ -84,3 +84,6 @@ export function isAiConfigured(s: ProviderFields): boolean {
 export function aiReadiness(s: ProviderFields): AiReadiness {
   return isAiConfigured(s) ? 'aiConfigured' : 'bootstrapped';
 }
+
+export { RANKING_PRESETS, matchPreset } from './ranking-presets';
+export type { RankingPreset, Weights } from './ranking-presets';
