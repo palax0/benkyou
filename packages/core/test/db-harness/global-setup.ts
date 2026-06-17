@@ -1,6 +1,11 @@
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { runMigrations } from '../../src/db/migrate.js';
-import { buildDatabaseUrl, quoteIdentifier } from './helpers';
+import {
+  ADMIN_URL_ENV,
+  buildDatabaseUrl,
+  quoteIdentifier,
+  TEMPLATE_DB_ENV,
+} from './helpers';
 import postgres from 'postgres';
 
 const TEMPLATE_DATABASE = 'benkyou_test_template';
@@ -34,8 +39,8 @@ export async function setup(): Promise<void> {
   process.env.SESSION_SECRET = 'a'.repeat(40);
   await runMigrations(templateUrl);
 
-  process.env.BENKYOU_TEST_DATABASE_ADMIN_URL = adminUrl;
-  process.env.BENKYOU_TEST_DATABASE_TEMPLATE = TEMPLATE_DATABASE;
+  process.env[ADMIN_URL_ENV] = adminUrl;
+  process.env[TEMPLATE_DB_ENV] = TEMPLATE_DATABASE;
 }
 
 export async function teardown(): Promise<void> {

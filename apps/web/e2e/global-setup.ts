@@ -10,10 +10,10 @@ const DATABASE_URL =
 export function assertSafeE2eDatabaseUrl(databaseUrl: string): void {
   const url = new URL(databaseUrl);
   const databaseName = decodeURIComponent(url.pathname.replace(/^\//, ''));
-  const isDedicatedE2eDatabase =
-    databaseName === 'benkyou_e2e' ||
-    databaseName.endsWith('_e2e') ||
-    databaseName.startsWith('e2e_');
+  // Require an explicit `_e2e` suffix (case-insensitive): narrow enough that a
+  // real database (`benkyou`, `prod`, …) can't slip through, and a plain `e2e`
+  // or a `e2e_`-prefixed name (e.g. `e2e_prod`) won't be mistaken for safe.
+  const isDedicatedE2eDatabase = /_e2e$/i.test(databaseName);
 
   if (!isDedicatedE2eDatabase) {
     throw new Error(

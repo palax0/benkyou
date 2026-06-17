@@ -1,14 +1,5 @@
 import { defineConfig } from 'vitest/config';
-
-const dbBackedTestPatterns = ['.int.test.ts', 'test/db.test.ts', 'test/boss.test.ts'];
-
-function shouldUseSharedDatabase(args: readonly string[]): boolean {
-  const filters = args.filter((arg) => !arg.startsWith('-') && arg !== 'run');
-  if (filters.length === 0) return true;
-  return filters.some((arg) =>
-    dbBackedTestPatterns.some((pattern) => arg.includes(pattern)),
-  );
-}
+import { shouldUseSharedDatabase } from './test/db-harness/helpers';
 
 export default defineConfig({
   test: {
@@ -17,9 +8,13 @@ export default defineConfig({
     globalSetup: shouldUseSharedDatabase(process.argv.slice(2))
       ? ['./test/db-harness/global-setup.ts']
       : [],
-    // Integration suites each create a pgvector Testcontainers database. Running
-    // files serially keeps local WSL/Docker memory use bounded.
-    fileParallelism: false,
+    // The OOM hazard (one pgvector container per test file) is gone: globalSetup
+    // now starts a single shared container and each suite clones a cheap database
+    // from a migrated template. Keep worker count capped as a conservative
+    // bound on concurrent connections/load against that one container on
+    // memory-constrained WSL; clones are independent and DATABASE_URL is per-fork.
+    fileParallelism: true,
+    maxWorkers: 2,
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },

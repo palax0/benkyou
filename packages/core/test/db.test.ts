@@ -6,6 +6,8 @@ describe('migrations apply to a fresh PG', () => {
   let db: TestDatabase;
 
   beforeAll(async () => {
+    // This suite tests runMigrations itself, so it must start from an empty DB
+    // and migrate explicitly — not the pre-migrated template the other suites clone.
     db = await createEmptyTestDatabase('db');
     await runMigrations(db.url);
   }, 120_000);

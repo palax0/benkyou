@@ -13,4 +13,16 @@ describe('e2e database URL guard', () => {
       assertSafeE2eDatabaseUrl('postgres://benkyou:benkyou@localhost:5432/benkyou_e2e'),
     ).not.toThrow();
   });
+
+  test('accepts the _e2e suffix case-insensitively', () => {
+    expect(() =>
+      assertSafeE2eDatabaseUrl('postgres://benkyou:benkyou@localhost:5432/benkyou_E2E'),
+    ).not.toThrow();
+  });
+
+  test('rejects an e2e_ prefix on a real database name', () => {
+    expect(() =>
+      assertSafeE2eDatabaseUrl('postgres://benkyou:benkyou@localhost:5432/e2e_prod'),
+    ).toThrow(/must point at a dedicated e2e database/i);
+  });
 });

@@ -7,8 +7,10 @@ export type TestDatabase = {
   cleanup: () => Promise<void>;
 };
 
-const ADMIN_URL_ENV = 'BENKYOU_TEST_DATABASE_ADMIN_URL';
-const TEMPLATE_DB_ENV = 'BENKYOU_TEST_DATABASE_TEMPLATE';
+// The seam between globalSetup (writer) and the per-test helpers (reader).
+// Both sides must agree on these names; keep them defined here only.
+export const ADMIN_URL_ENV = 'BENKYOU_TEST_DATABASE_ADMIN_URL';
+export const TEMPLATE_DB_ENV = 'BENKYOU_TEST_DATABASE_TEMPLATE';
 
 const dbBackedTestPatterns = [
   '.int.test.ts',
@@ -110,6 +112,10 @@ async function createTestDatabase(
     url,
     sql,
     cleanup: async () => {
+      // Dynamic import, never hoisted to a top-level import: client.js → env.ts
+      // reads process.env at load, so importing it before DATABASE_URL is set
+      // above would cache the wrong value. closeDbClient() is a no-op when the
+      // cached client was never created (suites using db.sql directly).
       const { closeDbClient } = await import('../../src/db/client.js');
       await closeDbClient();
       await sql.end();
