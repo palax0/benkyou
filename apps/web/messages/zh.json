@@ -142,7 +142,13 @@
     "edit": "编辑",
     "delete": "删除",
     "deleteWithContent": "连同该源全部内容一并删除",
-    "confirmDelete": "确认删除"
+    "confirmDelete": "确认删除",
+    "statusInFlight": "处理中 {n}",
+    "statusDone": "完成 {n}",
+    "statusFailed": "失败 {n}",
+    "allDone": "全部完成 {n}",
+    "expandStatus": "展开处理详情",
+    "failedExtract": "提取失败"
   },
   "jobs": {
     "title": "Pipeline",

@@ -142,7 +142,13 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteWithContent": "Delete this source and all its content",
-    "confirmDelete": "Confirm delete"
+    "confirmDelete": "Confirm delete",
+    "statusInFlight": "{n} processing",
+    "statusDone": "{n} done",
+    "statusFailed": "{n} failed",
+    "allDone": "All done · {n}",
+    "expandStatus": "Show processing detail",
+    "failedExtract": "Extract failed"
   },
   "jobs": {
     "title": "Pipeline",
