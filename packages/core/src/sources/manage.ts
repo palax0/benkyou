@@ -48,11 +48,22 @@ export async function createSource(input: {
   name: string;
   url: string;
   weight: number;
+  pollInterval?: number;
+  enabled?: boolean;
 }): Promise<string> {
   const db = getDbClient();
   const rows = await db
     .insert(sources)
-    .values({ type: 'rss', name: input.name, config: { url: input.url }, weight: String(input.weight) })
+    .values({
+      type: 'rss',
+      name: input.name,
+      config: { url: input.url },
+      weight: String(input.weight),
+      // enabled=false stores a "draft" source the poll loop skips (spec §4.4):
+      // lets a not-yet-aiConfigured user add a source without it failing.
+      ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+      ...(input.pollInterval === undefined ? {} : { pollInterval: input.pollInterval }),
+    })
     .returning({ id: sources.id });
   const id = rows[0]?.id;
   if (!id) throw new Error('Failed to create source');
@@ -61,12 +72,17 @@ export async function createSource(input: {
 
 export async function updateSource(
   id: string,
-  input: { name: string; url: string; weight: number },
+  input: { name: string; url: string; weight: number; pollInterval?: number },
 ): Promise<void> {
   const db = getDbClient();
   await db
     .update(sources)
-    .set({ name: input.name, config: { url: input.url }, weight: String(input.weight) })
+    .set({
+      name: input.name,
+      config: { url: input.url },
+      weight: String(input.weight),
+      ...(input.pollInterval === undefined ? {} : { pollInterval: input.pollInterval }),
+    })
     .where(eq(sources.id, id));
 }
 

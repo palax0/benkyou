@@ -51,6 +51,10 @@ export interface SettingsPatch {
   readerBaseUrl?: string | null;
   readerApiKey?: string | null;
   interestTags?: string[];
+  adhocSourceWeight?: string;
+  weightAlpha?: string;
+  weightBeta?: string;
+  weightGamma?: string;
 }
 
 export async function updateSettings(patch: SettingsPatch): Promise<void> {
