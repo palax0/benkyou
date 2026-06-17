@@ -148,7 +148,24 @@
     "statusFailed": "失败 {n}",
     "allDone": "全部完成 {n}",
     "expandStatus": "展开处理详情",
-    "failedExtract": "提取失败"
+    "failedExtract": "提取失败",
+    "overview": "总览",
+    "overviewCounts": "{total} 源 · 启用 {enabled} · 失败 {failed}",
+    "rssTitle": "RSS 订阅源",
+    "addRss": "+ 添加 RSS",
+    "plannedBadge": "{milestone} · 规划中",
+    "adhocTitle": "手动导入",
+    "adhocSubtitle": "无需轮询",
+    "adhocCount": "累计 {n} 条",
+    "adhocWeightLabel": "手动权重",
+    "adhocWeightHelp": "你手动粘贴的内容在排序里的权重",
+    "pasteUrl": "粘贴 URL",
+    "typeName": {
+      "youtube": "YouTube 频道",
+      "bilibili": "Bilibili 频道",
+      "hn": "Hacker News",
+      "reddit": "Reddit"
+    }
   },
   "jobs": {
     "title": "Pipeline",

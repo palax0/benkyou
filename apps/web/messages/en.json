@@ -148,7 +148,24 @@
     "statusFailed": "{n} failed",
     "allDone": "All done · {n}",
     "expandStatus": "Show processing detail",
-    "failedExtract": "Extract failed"
+    "failedExtract": "Extract failed",
+    "overview": "Overview",
+    "overviewCounts": "{total} sources · {enabled} enabled · {failed} failing",
+    "rssTitle": "RSS feeds",
+    "addRss": "+ Add RSS",
+    "plannedBadge": "{milestone} · planned",
+    "adhocTitle": "Manual import",
+    "adhocSubtitle": "no polling",
+    "adhocCount": "{n} items total",
+    "adhocWeightLabel": "Manual weight",
+    "adhocWeightHelp": "Weight of items you paste in manually, in ranking",
+    "pasteUrl": "Paste URL",
+    "typeName": {
+      "youtube": "YouTube channels",
+      "bilibili": "Bilibili channels",
+      "hn": "Hacker News",
+      "reddit": "Reddit"
+    }
   },
   "jobs": {
     "title": "Pipeline",

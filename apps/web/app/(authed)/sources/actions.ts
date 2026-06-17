@@ -9,6 +9,7 @@ import {
   setSourceEnabled,
   triggerSourceFetch,
 } from '@benkyou/core/sources';
+import { updateSettings } from '@benkyou/core/settings';
 import { requireAuth } from '@/lib/auth';
 
 export interface SourceFormState {
@@ -79,5 +80,13 @@ export async function deleteSourceAction(fd: FormData): Promise<void> {
   const id = Uuid.safeParse(fd.get('id'));
   if (!id.success) return;
   await deleteSource(id.data, { cascade: fd.get('cascade') === 'on' });
+  revalidatePath('/sources');
+}
+
+export async function updateAdhocWeightAction(fd: FormData): Promise<void> {
+  await requireAuth();
+  const w = Number(fd.get('adhocSourceWeight') ?? '1');
+  if (!Number.isFinite(w) || w < 0) return;
+  await updateSettings({ adhocSourceWeight: String(w) });
   revalidatePath('/sources');
 }
