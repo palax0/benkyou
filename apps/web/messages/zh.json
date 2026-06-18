@@ -131,7 +131,8 @@
     "sourceSection": "第一个 RSS 源",
     "sourceName": "名称",
     "sourceUrl": "RSS 地址",
-    "submit": "完成初始化并抓取",
+    "submit": "开始使用 Benkyou",
+    "invalid": "无效的选择",
     "dimMismatch": "Embedding 维度 {got} 与 EMBED_DIM={want} 不一致。若为高维模型，请勾选「请求输出维度」截断到 {want}；否则改用匹配的模型或更换 EMBED_DIM 重新初始化。",
     "llmFailed": "LLM 连接失败：{error}",
     "embedFailed": "Embedding 连接失败：{error}"

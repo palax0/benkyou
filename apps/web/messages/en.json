@@ -131,7 +131,8 @@
     "sourceSection": "First RSS source",
     "sourceName": "Name",
     "sourceUrl": "RSS URL",
-    "submit": "Finish & fetch",
+    "submit": "Start using Benkyou",
+    "invalid": "Invalid selection",
     "dimMismatch": "Embedding dim {got} != EMBED_DIM={want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}; otherwise use a matching model or re-init with a different EMBED_DIM.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}"

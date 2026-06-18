@@ -15,13 +15,13 @@ export function LoginForm() {
         required
         autoFocus
         placeholder={t('password')}
-        className="rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800"
+        className="rounded-md border border-line bg-surface p-2 text-ink"
       />
-      {state.error ? <p className="text-sm text-red-600">{t('invalid')}</p> : null}
+      {state.error ? <p className="text-sm text-err">{t('invalid')}</p> : null}
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-slate-900 p-2 text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+        className="rounded-md bg-accent-vivid p-2 text-bg disabled:opacity-50"
       >
         {t('submit')}
       </button>
