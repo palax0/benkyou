@@ -81,7 +81,8 @@
     "placeholder": "粘贴文章或视频链接…",
     "submit": "添加",
     "failed": "无法添加该链接",
-    "title": "添加链接"
+    "title": "添加链接",
+    "aiRequired": "先完成 AI 配置 →"
   },
   "item": {
     "deepSummary": "AI 深度摘要",
@@ -110,7 +111,8 @@
   "search": {
     "title": "搜索",
     "placeholder": "搜索内容…",
-    "noResults": "没有找到结果"
+    "noResults": "没有找到结果",
+    "aiRequired": "先完成 AI 配置后即可搜索 →"
   },
   "setup": {
     "title": "初始化 Benkyou",

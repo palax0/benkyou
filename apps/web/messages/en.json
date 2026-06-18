@@ -81,7 +81,8 @@
     "placeholder": "Paste an article or video URL…",
     "submit": "Add",
     "failed": "Couldn't add that link",
-    "title": "Add link"
+    "title": "Add link",
+    "aiRequired": "Configure AI first →"
   },
   "item": {
     "deepSummary": "AI deep summary",
@@ -110,7 +111,8 @@
   "search": {
     "title": "Search",
     "placeholder": "Search…",
-    "noResults": "No results"
+    "noResults": "No results",
+    "aiRequired": "Configure AI to enable search →"
   },
   "setup": {
     "title": "Initialize Benkyou",

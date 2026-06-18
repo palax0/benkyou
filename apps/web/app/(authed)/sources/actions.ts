@@ -78,6 +78,8 @@ export async function fetchSourceNowAction(fd: FormData): Promise<void> {
   await requireAuth();
   const id = Uuid.safeParse(fd.get('id'));
   if (!id.success) return;
+  const settings = await getUserSettings();
+  if (!settings || !isAiConfigured(settings)) return; // calm no-op; UI shows the disabled hint
   // Paused sources allow manual fetch (spec §6.2): pause only stops auto-polling.
   await triggerSourceFetch(id.data);
   revalidatePath('/sources');
