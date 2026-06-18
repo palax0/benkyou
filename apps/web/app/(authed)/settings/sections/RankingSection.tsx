@@ -2,8 +2,7 @@
 
 import { useActionState } from 'react';
 import { useTranslations } from 'next-intl';
-import { matchPreset, RANKING_PRESETS } from '@benkyou/core/settings';
-import type { RankingPreset } from '@benkyou/core/settings';
+import { matchPreset, RANKING_PRESETS, type RankingPreset } from '@benkyou/core/settings/ranking-presets';
 import { updateRankingAction, type SettingsState } from '../actions';
 
 const PRESETS = Object.keys(RANKING_PRESETS) as RankingPreset[];

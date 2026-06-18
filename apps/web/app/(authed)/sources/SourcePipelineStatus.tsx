@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { PIPELINE_STEPS, type SourcePipelineStatus as SourcePipelineStatusData } from '@benkyou/core/items';
+import type { SourcePipelineStatus as SourcePipelineStatusData } from '@benkyou/core/items';
+import { PIPELINE_STEPS } from '@benkyou/core/items/pipeline-view';
 import { retryItemAction } from '../admin/jobs/actions';
 
 export async function SourcePipelineStatus({ status }: { status: SourcePipelineStatusData }) {

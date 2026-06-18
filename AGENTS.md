@@ -129,8 +129,11 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm check:i18n
+pnpm build   # production build — the ONLY check that exercises the Next client/server bundle boundary; typecheck/test/`next dev` do not
 pnpm test
 ```
+
+**Why `pnpm build` is non-negotiable:** a client component (`'use client'`) that *value*-imports a DB-touching `@benkyou/core` barrel (`items`, `settings`, `sources`, …) pulls the `postgres` driver into the client bundle and fails only at `next build` — invisible to typecheck/vitest/`next dev`. The `benkyou/no-client-db-barrel` lint rule guards the common case (import the leaf module, e.g. `@benkyou/core/items/pipeline-view`, or use `import type`), but only the build catches the full transitive class.
 
 If you touched DB schema:
 ```bash

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { PIPELINE_STEPS, type StepView } from '@benkyou/core/items';
+import { PIPELINE_STEPS, type StepView } from '@benkyou/core/items/pipeline-view';
 import { retryItemAction } from '@/app/(authed)/admin/jobs/actions';
 
 // TranscriptStatus values that have a translation key in the 'item.transcript'
