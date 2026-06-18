@@ -82,7 +82,8 @@
     "submit": "Add",
     "failed": "Couldn't add that link",
     "title": "Add link",
-    "aiRequired": "Configure AI first →"
+    "aiRequired": "Configure AI first →",
+    "cancel": "Cancel"
   },
   "item": {
     "deepSummary": "AI deep summary",
@@ -269,6 +270,16 @@
     "addInterests": "Add in Settings",
     "noSources": "No sources yet.",
     "addSources": "Add a source",
-    "itemCount": "{count}"
+    "itemCount": "{count}",
+    "paste": "Paste"
+  },
+  "palette": {
+    "title": "Commands",
+    "search": "Search",
+    "paste": "Paste URL",
+    "feed": "Feed",
+    "sources": "Sources",
+    "settings": "Settings",
+    "placeholder": "Type a command…"
   }
 }

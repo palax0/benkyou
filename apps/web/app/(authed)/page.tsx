@@ -6,7 +6,6 @@ import { getOnboardingState } from '@benkyou/core/onboarding';
 import { ItemCard } from '@/components/ItemCard';
 import { CloseIcon, FeedIcon } from '@/components/shell/icons';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
-import { PasteForm } from './items/PasteForm';
 
 const PAGE_SIZE = 30;
 
@@ -30,10 +29,6 @@ export default async function HomePage({
       <h1 className="font-serif text-xl font-semibold tracking-tight text-ink">{t('title')}</h1>
 
       <OnboardingChecklist state={onboarding} />
-
-      <div className="mt-4 mb-2">
-        <PasteForm />
-      </div>
 
       {source ? (
         <div className="mt-2 flex items-center gap-2 text-sm text-muted">

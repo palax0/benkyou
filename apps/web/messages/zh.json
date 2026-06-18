@@ -82,7 +82,8 @@
     "submit": "添加",
     "failed": "无法添加该链接",
     "title": "添加链接",
-    "aiRequired": "先完成 AI 配置 →"
+    "aiRequired": "先完成 AI 配置 →",
+    "cancel": "取消"
   },
   "item": {
     "deepSummary": "AI 深度摘要",
@@ -269,6 +270,16 @@
     "addInterests": "去设置里添加",
     "noSources": "还没有订阅源。",
     "addSources": "添加一个源",
-    "itemCount": "{count} 条"
+    "itemCount": "{count} 条",
+    "paste": "粘贴"
+  },
+  "palette": {
+    "title": "命令",
+    "search": "搜索",
+    "paste": "粘贴 URL",
+    "feed": "动态",
+    "sources": "源",
+    "settings": "设置",
+    "placeholder": "输入命令…"
   }
 }

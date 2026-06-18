@@ -162,3 +162,13 @@ export function BookmarkIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function PasteIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="5" y="6" width="10" height="12" rx="1.5" />
+      <path d="M8 6V4.5A.5.5 0 0 1 8.5 4h3a.5.5 0 0 1 .5.5V6" />
+      <path d="M8 11h4M8 14h2.5" />
+    </svg>
+  );
+}

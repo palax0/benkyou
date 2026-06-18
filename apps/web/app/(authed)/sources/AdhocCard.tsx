@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { AdhocWeightForm } from './AdhocWeightForm';
+import { PasteShortcut } from './PasteShortcut';
 
 // The manual-import pseudo-source (spec §2.2): NOT a sources row. Surfaces the
 // adhoc_source_weight knob + its explanation + cumulative count + paste shortcut.
@@ -14,6 +15,7 @@ export async function AdhocCard({ adhocWeight, count }: { adhocWeight: string; c
         </span>
       </div>
       <AdhocWeightForm defaultWeight={adhocWeight} />
+      <PasteShortcut />
     </section>
   );
 }

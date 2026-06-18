@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { NavList } from './NavList';
 import { LocaleSwitcher } from './LocaleSwitcher';
-import { useGlobalSearchShortcut, useShellState } from './useShellState';
+import { useCommandPaletteShortcut, useShellState } from './useShellState';
+import { openPaste } from './commands';
 import { LogoutButton } from '@/components/LogoutButton';
-import { CloseIcon, CollapseIcon, ExpandIcon, MenuIcon, RailIcon } from './icons';
+import { PasteModal } from '@/components/PasteModal';
+import { CommandPalette } from '@/components/CommandPalette';
+import { CloseIcon, CollapseIcon, ExpandIcon, MenuIcon, PasteIcon, RailIcon } from './icons';
 
 function Wordmark({ compact, onNavigate }: { compact?: boolean; onNavigate?: () => void }) {
   return (
@@ -66,18 +69,20 @@ function MobileDrawer({
 export function AppShell({
   initialNavCollapsed,
   initialRailHidden,
+  aiConfigured,
   rail,
   children,
 }: {
   initialNavCollapsed: boolean;
   initialRailHidden: boolean;
+  aiConfigured: boolean;
   rail: ReactNode;
   children: ReactNode;
 }) {
   const t = useTranslations('shell');
   const { collapsed, railHidden, drawerOpen, toggleNav, toggleRail, openDrawer, closeDrawer } =
     useShellState({ navCollapsed: initialNavCollapsed, railHidden: initialRailHidden });
-  useGlobalSearchShortcut();
+  useCommandPaletteShortcut();
 
   return (
     <div className="flex min-h-dvh">
@@ -133,6 +138,15 @@ export function AppShell({
             <LocaleSwitcher />
             <button
               type="button"
+              onClick={openPaste}
+              title={t('paste')}
+              aria-label={t('paste')}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors duration-150 hover:bg-ink/5 hover:text-ink motion-reduce:transition-none"
+            >
+              <PasteIcon />
+            </button>
+            <button
+              type="button"
               onClick={toggleRail}
               title={railHidden ? t('showRail') : t('hideRail')}
               aria-label={railHidden ? t('showRail') : t('hideRail')}
@@ -179,6 +193,9 @@ export function AppShell({
           </nav>
         </div>
       </MobileDrawer>
+
+      <PasteModal aiConfigured={aiConfigured} />
+      <CommandPalette />
     </div>
   );
 }
