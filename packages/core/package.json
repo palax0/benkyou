@@ -14,11 +14,14 @@
     "./queue": "./src/queue/index.ts",
     "./pipeline": "./src/pipeline/index.ts",
     "./settings": "./src/settings/index.ts",
+    "./settings/ranking-presets": "./src/settings/ranking-presets.ts",
     "./sources": "./src/sources/index.ts",
     "./setup": "./src/setup/index.ts",
     "./config": "./src/config/env.ts",
     "./items": "./src/items/index.ts",
-    "./search": "./src/search/index.ts"
+    "./items/pipeline-view": "./src/items/pipeline-view.ts",
+    "./search": "./src/search/index.ts",
+    "./onboarding": "./src/onboarding.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts",

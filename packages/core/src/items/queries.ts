@@ -1,5 +1,6 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { getDbClient, items, sources } from '../db';
+import { mapStep } from './pipeline-view';
 
 export interface FeedItem {
   id: string;
@@ -134,4 +135,51 @@ export async function getItemProgress(id: string): Promise<ItemProgress | null> 
     .where(eq(items.id, id))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export interface SourcePipelineStatus {
+  inFlight: { itemId: string; title: string; step: number }[];
+  doneCount: number;
+  failed: { itemId: string; title: string; error: string | null }[];
+}
+
+// Count of items submitted via the paste/adhoc flow (no source_id) for the AdhocCard.
+export async function getAdhocCount(): Promise<number> {
+  const db = getDbClient();
+  const rows = await db.select({ c: sql<number>`count(*)::int` }).from(items).where(isNull(items.sourceId));
+  return rows[0]?.c ?? 0;
+}
+
+// Per-source pipeline summary (spec §3.4). doneCount is a COUNT (a source may have
+// thousands of done items); only the small non-terminal + failed rows are
+// materialised. NOTE: detail is fetched eagerly here — lazy-load-on-expand
+// (spec §11.3) is a deferred optimization, not built this round.
+export async function getSourcePipelineStatus(sourceId: string): Promise<SourcePipelineStatus> {
+  const db = getDbClient();
+  const doneRows = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(items)
+    .where(and(eq(items.sourceId, sourceId), eq(items.state, 'done')));
+  const rows = await db
+    .select({
+      id: items.id,
+      title: items.title,
+      state: items.state,
+      currentStage: items.currentStage,
+      transcriptStatus: items.transcriptStatus,
+      lastError: items.lastError,
+    })
+    .from(items)
+    .where(and(eq(items.sourceId, sourceId), ne(items.state, 'done')));
+
+  const status: SourcePipelineStatus = { inFlight: [], doneCount: doneRows[0]?.c ?? 0, failed: [] };
+  for (const r of rows) {
+    if (r.state === 'failed') {
+      status.failed.push({ itemId: r.id, title: r.title, error: r.lastError });
+      continue;
+    }
+    const step = mapStep(r.state, r.currentStage, r.transcriptStatus, r.lastError).activeIndex;
+    status.inFlight.push({ itemId: r.id, title: r.title, step });
+  }
+  return status;
 }

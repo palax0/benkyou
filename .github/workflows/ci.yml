@@ -20,6 +20,15 @@ jobs:
       - run: pnpm -w run lint
       - run: pnpm -w run typecheck
       - run: pnpm -w run check:i18n
+      # Production build — the only check that exercises the Next client/server
+      # bundle boundary (typecheck/vitest/`next dev` don't). Fast, non-Docker
+      # signal ahead of the slower docker-build job.
+      - run: pnpm -w run build
+        env:
+          DEPLOY_MODE: docker
+          DATABASE_URL: postgres://test:test@localhost:5432/test
+          SESSION_SECRET: 'a-test-secret-with-enough-length-32+'
+          EMBED_DIM: '1536'
       - run: pnpm -w run test
         env:
           DEPLOY_MODE: docker

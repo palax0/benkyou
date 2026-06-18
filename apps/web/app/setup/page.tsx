@@ -10,7 +10,7 @@ export default async function SetupPage() {
   return (
     <main className="mx-auto max-w-lg p-8">
       <h1 className="mb-6 text-2xl font-bold">{t('title')}</h1>
-      {env.INITIAL_PASSWORD ? <SetupForm embedDim={env.EMBED_DIM} /> : <p className="text-red-600">{t('needInitialPassword')}</p>}
+      {env.INITIAL_PASSWORD ? <SetupForm /> : <p className="text-err">{t('needInitialPassword')}</p>}
     </main>
   );
 }

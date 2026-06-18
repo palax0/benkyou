@@ -2,11 +2,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 
+// SettingsForm was split into sections/AiServicesSection.tsx (the AI services section that
+// still uses updateSettingsAction and enforces the secret boundary).
 const dir = path.resolve(import.meta.dirname);
 
 describe('settings form secret boundary', () => {
   test('client form does not read stored provider API keys', async () => {
-    const source = await readFile(path.join(dir, 'SettingsForm.tsx'), 'utf8');
+    const source = await readFile(path.join(dir, 'sections/AiServicesSection.tsx'), 'utf8');
 
     expect(source).not.toMatch(/settings\.llmApiKey(?!Configured)/);
     expect(source).not.toMatch(/settings\.embedApiKey(?!Configured)/);
@@ -25,7 +27,7 @@ describe('settings form secret boundary', () => {
   });
 
   test('client form does not read the stored reader API key, and renders the reader section', async () => {
-    const source = await readFile(path.join(dir, 'SettingsForm.tsx'), 'utf8');
+    const source = await readFile(path.join(dir, 'sections/AiServicesSection.tsx'), 'utf8');
     expect(source).not.toMatch(/settings\.readerApiKey(?!Configured)/);
     expect(source).toContain('readerApiKeyConfigured');
     expect(source).toContain("name=\"readerBaseUrl\"");

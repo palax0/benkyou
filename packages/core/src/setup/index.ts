@@ -24,17 +24,11 @@ export async function isInitialized(): Promise<boolean> {
 export interface SetupInput {
   password: string;
   locale: 'zh' | 'en';
-  llm: { provider: string; baseUrl?: string; apiKey?: string; model: string; cheapModel?: string };
-  embedding: {
-    provider: string;
-    baseUrl?: string;
-    apiKey?: string;
-    model: string;
-    requestDimensions?: boolean;
-  };
-  interestTags: string[];
 }
 
+// Bootstrap split (spec §4.2): create the single user_settings row with password +
+// locale + frozen embed_dim ONLY. Provider columns stay NULL (nullable in schema);
+// they are filled later in-app via the settings flow (onboarding step ①).
 export async function completeSetup(input: SetupInput): Promise<{ inserted: boolean }> {
   const db = getDbClient();
   const passwordHash = await hashPassword(input.password);
@@ -45,17 +39,7 @@ export async function completeSetup(input: SetupInput): Promise<{ inserted: bool
       passwordHash,
       locale: input.locale,
       embedDim: env.EMBED_DIM, // frozen at install time (Hard Invariant)
-      llmProvider: input.llm.provider,
-      llmBaseUrl: input.llm.baseUrl ?? null,
-      llmApiKey: input.llm.apiKey ?? null,
-      llmModel: input.llm.model,
-      llmCheapModel: input.llm.cheapModel ?? input.llm.model,
-      embedProvider: input.embedding.provider,
-      embedBaseUrl: input.embedding.baseUrl ?? null,
-      embedApiKey: input.embedding.apiKey ?? null,
-      embedModel: input.embedding.model,
-      embedRequestDimensions: input.embedding.requestDimensions ?? false,
-      interestTags: input.interestTags,
+      interestTags: [],
     })
     .onConflictDoNothing({ target: userSettings.id })
     .returning({ id: userSettings.id });

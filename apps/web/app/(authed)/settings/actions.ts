@@ -1,10 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { env } from '@benkyou/core/config';
 import { hashPassword } from '@benkyou/core/auth';
-import { getUserSettings, setPasswordHash, updateSettings } from '@benkyou/core/settings';
+import { getUserSettings, setPasswordHash, updateSettings, RANKING_PRESETS } from '@benkyou/core/settings';
+import type { RankingPreset } from '@benkyou/core/settings';
 import { testEmbedding, testLLM } from '@benkyou/core/setup';
 import { requireAuth } from '@/lib/auth';
 
@@ -129,6 +131,45 @@ export async function updateSettingsAction(_p: SettingsState, fd: FormData): Pro
     readerBaseUrl: v.readerBaseUrl ?? null,
     readerApiKey,
   });
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+export async function updateRankingAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
+  await requireAuth();
+  const preset = String(fd.get('preset') ?? '');
+  if (preset in RANKING_PRESETS) {
+    const w = RANKING_PRESETS[preset as RankingPreset];
+    await updateSettings({ weightAlpha: String(w.alpha), weightBeta: String(w.beta), weightGamma: String(w.gamma) });
+  } else {
+    // custom: read the three numbers (spec §5.3 advanced fold). Guard finiteness/range
+    // so a tampered form can't write NaN/negatives into the numeric weight columns.
+    const num = (k: string): number => Number(fd.get(k) ?? 0);
+    const alpha = num('alpha');
+    const beta = num('beta');
+    const gamma = num('gamma');
+    if (![alpha, beta, gamma].every((n) => Number.isFinite(n) && n >= 0)) {
+      return { error: 'invalidWeights' };
+    }
+    await updateSettings({ weightAlpha: String(alpha), weightBeta: String(beta), weightGamma: String(gamma) });
+  }
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+export async function updateInterestsAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
+  await requireAuth();
+  const tags = String(fd.get('interestTags') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  await updateSettings({ interestTags: tags });
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+export async function updateAppearanceAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
+  await requireAuth();
+  const locale = fd.get('locale') === 'en' ? 'en' : 'zh';
+  (await cookies()).set('locale', locale, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+  await updateSettings({ locale });
   revalidatePath('/settings');
   return { ok: true };
 }

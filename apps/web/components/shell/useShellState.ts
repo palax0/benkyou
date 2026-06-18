@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { PALETTE_EVENT } from './commands';
 
 function persist(name: 'bk_nav' | 'bk_rail', value: string): void {
   document.cookie = `${name}=${value}; path=/; max-age=31536000; samesite=lax`;
@@ -52,18 +52,17 @@ export function useShellState(init: {
   };
 }
 
-// Cmd/Ctrl-K opens search from anywhere. Kept out of the view so the shell
-// markup stays logic-free (polishable without touching behavior).
-export function useGlobalSearchShortcut(): void {
-  const router = useRouter();
+// Cmd/Ctrl-K opens the command palette from anywhere. Kept out of the view so
+// the shell markup stays logic-free (polishable without touching behavior).
+export function useCommandPaletteShortcut(): void {
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        router.push('/search');
+        window.dispatchEvent(new CustomEvent(PALETTE_EVENT));
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [router]);
+  }, []);
 }

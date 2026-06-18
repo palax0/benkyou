@@ -14,11 +14,11 @@ export function PasswordForm() {
         name="newPassword"
         required
         placeholder={t('newPassword')}
-        className="rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800"
+        className="rounded-md border border-line bg-surface p-2 text-ink"
       />
-      {state.error ? <p className="text-sm text-red-600">{t('passwordTooShort')}</p> : null}
-      {state.ok ? <p className="text-sm text-green-600">{t('passwordChanged')}</p> : null}
-      <button type="submit" disabled={pending} className="rounded border border-slate-400 p-2 disabled:opacity-50">
+      {state.error ? <p className="text-sm text-err">{t('passwordTooShort')}</p> : null}
+      {state.ok ? <p className="text-sm text-accent">{t('passwordChanged')}</p> : null}
+      <button type="submit" disabled={pending} className="rounded-md border border-line p-2 text-ink disabled:opacity-50">
         {t('changePassword')}
       </button>
     </form>

@@ -35,6 +35,18 @@
   "settings": {
     "title": "设置",
     "providerSection": "模型配置",
+    "aiSection": "AI 服务",
+    "rankingSection": "排序与打分",
+    "interestsSection": "兴趣标签",
+    "appearanceSection": "外观与语言",
+    "accountSection": "账户安全",
+    "rankingStyle": "排序风格",
+    "rankingHelp": "决定 feed 智能排序 / 日报 / 搜索怎么排。",
+    "preset": { "balanced": "均衡", "relevance": "偏相关", "depth": "偏深度", "source": "偏高权重源", "custom": "自定义" },
+    "advancedWeights": "高级:自定义权重 α/β/γ",
+    "alpha": "α 相关", "beta": "β 深度", "gamma": "γ 来源",
+    "interestsHelp": "用于算「相关性」分,影响日报与智能排序。",
+    "theme": "深色模式", "themeSystem": "跟随系统", "themeLight": "浅色", "themeDark": "深色",
     "saved": "已保存",
     "embedDimNote": "Embedding 维度在初始化时固定为 {dim}，更改需重新生成迁移并以新维度重新初始化（暂无自动迁移脚本）。",
     "passwordSection": "修改密码",
@@ -69,7 +81,9 @@
     "placeholder": "粘贴文章或视频链接…",
     "submit": "添加",
     "failed": "无法添加该链接",
-    "title": "添加链接"
+    "title": "添加链接",
+    "aiRequired": "先完成 AI 配置 →",
+    "cancel": "取消"
   },
   "item": {
     "deepSummary": "AI 深度摘要",
@@ -98,7 +112,8 @@
   "search": {
     "title": "搜索",
     "placeholder": "搜索内容…",
-    "noResults": "没有找到结果"
+    "noResults": "没有找到结果",
+    "aiRequired": "先完成 AI 配置后即可搜索 →"
   },
   "setup": {
     "title": "初始化 Benkyou",
@@ -117,7 +132,8 @@
     "sourceSection": "第一个 RSS 源",
     "sourceName": "名称",
     "sourceUrl": "RSS 地址",
-    "submit": "完成初始化并抓取",
+    "submit": "开始使用 Benkyou",
+    "invalid": "无效的选择",
     "dimMismatch": "Embedding 维度 {got} 与 EMBED_DIM={want} 不一致。若为高维模型，请勾选「请求输出维度」截断到 {want}；否则改用匹配的模型或更换 EMBED_DIM 重新初始化。",
     "llmFailed": "LLM 连接失败：{error}",
     "embedFailed": "Embedding 连接失败：{error}"
@@ -142,7 +158,31 @@
     "edit": "编辑",
     "delete": "删除",
     "deleteWithContent": "连同该源全部内容一并删除",
-    "confirmDelete": "确认删除"
+    "confirmDelete": "确认删除",
+    "statusInFlight": "处理中 {n}",
+    "statusDone": "完成 {n}",
+    "statusFailed": "失败 {n}",
+    "allDone": "全部完成 {n}",
+    "overview": "总览",
+    "overviewCounts": "{total} 源 · 启用 {enabled} · 失败 {failed}",
+    "rssTitle": "RSS 订阅源",
+    "addRss": "+ 添加 RSS",
+    "plannedBadge": "{milestone} · 规划中",
+    "adhocTitle": "手动导入",
+    "adhocSubtitle": "无需轮询",
+    "adhocCount": "累计 {n} 条",
+    "adhocWeightLabel": "手动权重",
+    "adhocWeightHelp": "你手动粘贴的内容在排序里的权重",
+    "pollIntervalLabel": "拉取频率",
+    "pollIntervalHelp": "每隔多久自动拉取一次该源（默认 30 分钟）",
+    "weightHelp": "越高 → 该源内容在排序里越靠前",
+    "pasteUrl": "粘贴 URL",
+    "typeName": {
+      "youtube": "YouTube 频道",
+      "bilibili": "Bilibili 频道",
+      "hn": "Hacker News",
+      "reddit": "Reddit"
+    }
   },
   "jobs": {
     "title": "Pipeline",
@@ -188,6 +228,23 @@
     "orphans": "{n} 条任务疑似丢失",
     "cta": "查看"
   },
+  "pipeline": {
+    "fetch": "抓取",
+    "extract": "提取",
+    "embed": "嵌入",
+    "score": "打分",
+    "done": "完成",
+    "failedAt": "在「{step}」失败",
+    "retry": "重试"
+  },
+  "onboarding": {
+    "title": "开始使用",
+    "step1": "配置 AI 服务",
+    "step2": "添加第一个源",
+    "step3": "看它处理入库",
+    "dismiss": "暂时收起",
+    "done": "✓"
+  },
   "shell": {
     "skipToContent": "跳到正文",
     "mainNav": "主导航",
@@ -211,6 +268,16 @@
     "addInterests": "去设置里添加",
     "noSources": "还没有订阅源。",
     "addSources": "添加一个源",
-    "itemCount": "{count} 条"
+    "itemCount": "{count} 条",
+    "paste": "粘贴"
+  },
+  "palette": {
+    "title": "命令",
+    "search": "搜索",
+    "paste": "粘贴 URL",
+    "feed": "动态",
+    "sources": "源",
+    "settings": "设置",
+    "placeholder": "输入命令…"
   }
 }

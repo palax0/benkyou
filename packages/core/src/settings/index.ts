@@ -51,6 +51,10 @@ export interface SettingsPatch {
   readerBaseUrl?: string | null;
   readerApiKey?: string | null;
   interestTags?: string[];
+  adhocSourceWeight?: string;
+  weightAlpha?: string;
+  weightBeta?: string;
+  weightGamma?: string;
 }
 
 export async function updateSettings(patch: SettingsPatch): Promise<void> {
@@ -69,3 +73,21 @@ export async function setPasswordHash(passwordHash: string): Promise<void> {
     .set({ passwordHash, updatedAt: new Date() })
     .where(eq(userSettings.id, 1));
 }
+
+// Two derived AI-readiness states (spec §4.4), computed from existing user_settings
+// columns — no new column. bootstrapped = row exists (password set) but provider
+// unconfigured; aiConfigured = llm + embed provider+model all present.
+export type AiReadiness = 'bootstrapped' | 'aiConfigured';
+
+type ProviderFields = Pick<UserSettings, 'llmProvider' | 'llmModel' | 'embedProvider' | 'embedModel'>;
+
+export function isAiConfigured(s: ProviderFields): boolean {
+  return Boolean(s.llmProvider && s.llmModel && s.embedProvider && s.embedModel);
+}
+
+export function aiReadiness(s: ProviderFields): AiReadiness {
+  return isAiConfigured(s) ? 'aiConfigured' : 'bootstrapped';
+}
+
+export { RANKING_PRESETS, matchPreset } from './ranking-presets';
+export type { RankingPreset, Weights } from './ranking-presets';

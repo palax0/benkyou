@@ -35,6 +35,18 @@
   "settings": {
     "title": "Settings",
     "providerSection": "Model configuration",
+    "aiSection": "AI services",
+    "rankingSection": "Ranking & scoring",
+    "interestsSection": "Interest tags",
+    "appearanceSection": "Appearance & language",
+    "accountSection": "Account & security",
+    "rankingStyle": "Ranking style",
+    "rankingHelp": "Controls how the feed, digest, and search are ordered.",
+    "preset": { "balanced": "Balanced", "relevance": "Relevance", "depth": "Depth", "source": "Source weight", "custom": "Custom" },
+    "advancedWeights": "Advanced: custom α/β/γ weights",
+    "alpha": "α relevance", "beta": "β depth", "gamma": "γ source",
+    "interestsHelp": "Used for the relevance score; affects digest and smart ranking.",
+    "theme": "Dark mode", "themeSystem": "Follow system", "themeLight": "Light", "themeDark": "Dark",
     "saved": "Saved",
     "embedDimNote": "Embedding dim is frozen at {dim} since install. Changing it means regenerating the migration and re-initializing at the new dimension — no automated migration yet.",
     "passwordSection": "Change password",
@@ -69,7 +81,9 @@
     "placeholder": "Paste an article or video URL…",
     "submit": "Add",
     "failed": "Couldn't add that link",
-    "title": "Add link"
+    "title": "Add link",
+    "aiRequired": "Configure AI first →",
+    "cancel": "Cancel"
   },
   "item": {
     "deepSummary": "AI deep summary",
@@ -98,7 +112,8 @@
   "search": {
     "title": "Search",
     "placeholder": "Search…",
-    "noResults": "No results"
+    "noResults": "No results",
+    "aiRequired": "Configure AI to enable search →"
   },
   "setup": {
     "title": "Initialize Benkyou",
@@ -117,7 +132,8 @@
     "sourceSection": "First RSS source",
     "sourceName": "Name",
     "sourceUrl": "RSS URL",
-    "submit": "Finish & fetch",
+    "submit": "Start using Benkyou",
+    "invalid": "Invalid selection",
     "dimMismatch": "Embedding dim {got} != EMBED_DIM={want}. If this is a high-dim model, check \"Request output dimensions\" to truncate to {want}; otherwise use a matching model or re-init with a different EMBED_DIM.",
     "llmFailed": "LLM connection failed: {error}",
     "embedFailed": "Embedding connection failed: {error}"
@@ -142,7 +158,31 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteWithContent": "Delete this source and all its content",
-    "confirmDelete": "Confirm delete"
+    "confirmDelete": "Confirm delete",
+    "statusInFlight": "{n} processing",
+    "statusDone": "{n} done",
+    "statusFailed": "{n} failed",
+    "allDone": "All done · {n}",
+    "overview": "Overview",
+    "overviewCounts": "{total} sources · {enabled} enabled · {failed} failing",
+    "rssTitle": "RSS feeds",
+    "addRss": "+ Add RSS",
+    "plannedBadge": "{milestone} · planned",
+    "adhocTitle": "Manual import",
+    "adhocSubtitle": "no polling",
+    "adhocCount": "{n} items total",
+    "adhocWeightLabel": "Manual weight",
+    "adhocWeightHelp": "Weight of items you paste in manually, in ranking",
+    "pollIntervalLabel": "Fetch frequency",
+    "pollIntervalHelp": "How often this source is auto-fetched (default 30 min)",
+    "weightHelp": "Higher → this source ranks earlier",
+    "pasteUrl": "Paste URL",
+    "typeName": {
+      "youtube": "YouTube channels",
+      "bilibili": "Bilibili channels",
+      "hn": "Hacker News",
+      "reddit": "Reddit"
+    }
   },
   "jobs": {
     "title": "Pipeline",
@@ -188,6 +228,23 @@
     "orphans": "{n} task(s) appear lost",
     "cta": "View"
   },
+  "pipeline": {
+    "fetch": "Fetch",
+    "extract": "Extract",
+    "embed": "Embed",
+    "score": "Score",
+    "done": "Done",
+    "failedAt": "Failed at {step}",
+    "retry": "Retry"
+  },
+  "onboarding": {
+    "title": "Get started",
+    "step1": "Configure AI services",
+    "step2": "Add your first source",
+    "step3": "Watch it process",
+    "dismiss": "Hide for now",
+    "done": "✓"
+  },
   "shell": {
     "skipToContent": "Skip to content",
     "mainNav": "Main navigation",
@@ -211,6 +268,16 @@
     "addInterests": "Add in Settings",
     "noSources": "No sources yet.",
     "addSources": "Add a source",
-    "itemCount": "{count}"
+    "itemCount": "{count}",
+    "paste": "Paste"
+  },
+  "palette": {
+    "title": "Commands",
+    "search": "Search",
+    "paste": "Paste URL",
+    "feed": "Feed",
+    "sources": "Sources",
+    "settings": "Settings",
+    "placeholder": "Type a command…"
   }
 }

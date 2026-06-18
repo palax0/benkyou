@@ -3,17 +3,23 @@
 import { useActionState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { UserSettings } from '@benkyou/core/settings';
-import { updateSettingsAction, type SettingsState } from './actions';
+import { updateSettingsAction, type SettingsState } from '../actions';
 
-const field = 'rounded border border-slate-300 p-2 dark:border-slate-700 dark:bg-slate-800';
+const field = 'rounded-md border border-line bg-surface p-2 text-ink';
 
-export type SettingsFormSettings = Omit<UserSettings, 'llmApiKey' | 'embedApiKey' | 'readerApiKey'> & {
+export type AiServicesSectionSettings = Omit<UserSettings, 'llmApiKey' | 'embedApiKey' | 'readerApiKey'> & {
   llmApiKeyConfigured: boolean;
   embedApiKeyConfigured: boolean;
   readerApiKeyConfigured: boolean;
 };
 
-export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSettings; embedDim: number }) {
+export function AiServicesSection({
+  settings,
+  embedDim,
+}: {
+  settings: AiServicesSectionSettings;
+  embedDim: number;
+}) {
   const t = useTranslations('settings');
   const [state, action, pending] = useActionState<SettingsState, FormData>(updateSettingsAction, {});
 
@@ -27,10 +33,14 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
 
   return (
     <form action={action} className="flex flex-col gap-3">
-      <select name="locale" defaultValue={v?.locale ?? settings.locale} className={field}>
-        <option value="zh">中文</option>
-        <option value="en">English</option>
-      </select>
+      {/* Hidden fields to prevent clobber: updateSettingsAction requires locale and reads interestTags.
+          Without these, locale validation fails (z.enum required) and interestTags gets wiped to []. */}
+      <input type="hidden" name="locale" value={settings.locale ?? 'zh'} />
+      <input
+        type="hidden"
+        name="interestTags"
+        value={(settings.interestTags ?? []).join(', ')}
+      />
 
       <input name="llmProvider" required defaultValue={v?.llmProvider ?? settings.llmProvider ?? ''} className={field} placeholder={t('llmProviderPlaceholder')} />
       <input name="llmBaseUrl" defaultValue={v?.llmBaseUrl ?? settings.llmBaseUrl ?? ''} className={field} placeholder={t('llmBaseUrlPlaceholder')} />
@@ -58,11 +68,12 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
         <input type="checkbox" name="embedRequestDimensions" defaultChecked={v?.embedRequestDimensions ?? settings.embedRequestDimensions} />
         <span>{t('requestDimensions', { dim: embedDim })}</span>
       </label>
-      <p className="text-xs text-slate-500">{t('requestDimensionsHelp', { dim: embedDim })}</p>
+      <p className="text-xs text-muted">{t('requestDimensionsHelp', { dim: embedDim })}</p>
 
-      <p className="text-xs text-slate-500">{t('embedDimNote', { dim: embedDim })}</p>
+      {/* embed_dim is read-only — frozen at install time (spec §5.3) */}
+      <p className="text-xs text-faint">{t('embedDimNote', { dim: embedDim })}</p>
 
-      <h2 className="font-semibold">{t('readerSection')}</h2>
+      <h3 className="font-semibold text-ink">{t('readerSection')}</h3>
       <input
         name="readerBaseUrl"
         defaultValue={v?.readerBaseUrl ?? settings.readerBaseUrl ?? ''}
@@ -77,16 +88,9 @@ export function SettingsForm({ settings, embedDim }: { settings: SettingsFormSet
         placeholder={settings.readerApiKeyConfigured ? t('readerApiKeyConfigured') : t('readerApiKeyPlaceholder')}
       />
 
-      <input
-        name="interestTags"
-        defaultValue={v?.interestTags ?? (settings.interestTags ?? []).join(', ')}
-        className={field}
-        placeholder={t('interestTagsPlaceholder')}
-      />
-
-      {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
-      {state.ok ? <p className="text-sm text-green-600">{t('saved')}</p> : null}
-      <button type="submit" disabled={pending} className="rounded bg-slate-900 p-2 text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900">
+      {errorText ? <p className="text-sm text-err">{errorText}</p> : null}
+      {state.ok ? <p className="text-sm text-accent">{t('saved')}</p> : null}
+      <button type="submit" disabled={pending} className="self-start rounded-md bg-accent-vivid px-4 py-1.5 text-bg disabled:opacity-50">
         {t('save')}
       </button>
     </form>

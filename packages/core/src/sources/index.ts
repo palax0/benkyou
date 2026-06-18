@@ -6,3 +6,5 @@ import { resolveAdapter, detectAdhocType } from './resolve';
 export { getAdapter, resolveAdapter, detectAdhocType };
 export type { RawItem, SourceAdapter } from './types';
 export * from './manage';
+export { SOURCE_TYPE_CATALOG } from './catalog';
+export type { SourceTypeInfo, SourceTypeStatus } from './catalog';
