@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type * as SettingsModule from '@benkyou/core/settings';
 
 const redirectError = new Error('NEXT_REDIRECT');
 const currentSettings = {
@@ -38,11 +39,15 @@ vi.mock('@benkyou/core/auth', () => ({
   hashPassword: mocks.hashPassword,
 }));
 
-vi.mock('@benkyou/core/settings', () => ({
-  getUserSettings: mocks.getUserSettings,
-  setPasswordHash: mocks.setPasswordHash,
-  updateSettings: mocks.updateSettings,
-}));
+vi.mock('@benkyou/core/settings', async (importActual) => {
+  const actual = await importActual<typeof SettingsModule>();
+  return {
+    ...actual,
+    getUserSettings: mocks.getUserSettings,
+    setPasswordHash: mocks.setPasswordHash,
+    updateSettings: mocks.updateSettings,
+  };
+});
 
 vi.mock('@benkyou/core/setup', () => ({
   testEmbedding: mocks.testEmbedding,
@@ -118,5 +123,47 @@ describe('settings server actions', () => {
         embedApiKey: 'stored-embed-key',
       }),
     );
+  });
+
+  describe('updateRankingAction custom-weights branch', () => {
+    function rankingForm(entries: Record<string, string>): FormData {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(entries)) fd.set(k, v);
+      return fd;
+    }
+
+    test('writes finite non-negative custom weights', async () => {
+      const { updateRankingAction } = await import('./actions.js');
+      const result = await updateRankingAction({}, rankingForm({ alpha: '0.5', beta: '0.3', gamma: '0.2' }));
+      expect(result.ok).toBe(true);
+      expect(mocks.updateSettings).toHaveBeenCalledWith({ weightAlpha: '0.5', weightBeta: '0.3', weightGamma: '0.2' });
+    });
+
+    test('rejects non-numeric weights without writing', async () => {
+      const { updateRankingAction } = await import('./actions.js');
+      const result = await updateRankingAction({}, rankingForm({ alpha: 'abc', beta: '0.3', gamma: '0.2' }));
+      expect(result.error).toBe('invalidWeights');
+      expect(mocks.updateSettings).not.toHaveBeenCalled();
+    });
+
+    test('rejects negative weights without writing', async () => {
+      const { updateRankingAction } = await import('./actions.js');
+      const result = await updateRankingAction({}, rankingForm({ alpha: '-1', beta: '0.3', gamma: '0.2' }));
+      expect(result.error).toBe('invalidWeights');
+      expect(mocks.updateSettings).not.toHaveBeenCalled();
+    });
+
+    test('preset branch writes the preset weights', async () => {
+      const { updateRankingAction } = await import('./actions.js');
+      const { RANKING_PRESETS } = await import('@benkyou/core/settings');
+      const result = await updateRankingAction({}, rankingForm({ preset: 'balanced' }));
+      expect(result.ok).toBe(true);
+      const w = RANKING_PRESETS.balanced;
+      expect(mocks.updateSettings).toHaveBeenCalledWith({
+        weightAlpha: String(w.alpha),
+        weightBeta: String(w.beta),
+        weightGamma: String(w.gamma),
+      });
+    });
   });
 });

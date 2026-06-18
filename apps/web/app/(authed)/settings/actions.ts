@@ -142,9 +142,16 @@ export async function updateRankingAction(_p: SettingsState, fd: FormData): Prom
     const w = RANKING_PRESETS[preset as RankingPreset];
     await updateSettings({ weightAlpha: String(w.alpha), weightBeta: String(w.beta), weightGamma: String(w.gamma) });
   } else {
-    // custom: read the three numbers (spec §5.3 advanced fold)
-    const num = (k: string): string => String(Number(fd.get(k) ?? 0));
-    await updateSettings({ weightAlpha: num('alpha'), weightBeta: num('beta'), weightGamma: num('gamma') });
+    // custom: read the three numbers (spec §5.3 advanced fold). Guard finiteness/range
+    // so a tampered form can't write NaN/negatives into the numeric weight columns.
+    const num = (k: string): number => Number(fd.get(k) ?? 0);
+    const alpha = num('alpha');
+    const beta = num('beta');
+    const gamma = num('gamma');
+    if (![alpha, beta, gamma].every((n) => Number.isFinite(n) && n >= 0)) {
+      return { error: 'invalidWeights' };
+    }
+    await updateSettings({ weightAlpha: String(alpha), weightBeta: String(beta), weightGamma: String(gamma) });
   }
   revalidatePath('/settings');
   return { ok: true };
