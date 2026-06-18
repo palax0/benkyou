@@ -159,6 +159,9 @@
     "adhocCount": "{n} items total",
     "adhocWeightLabel": "Manual weight",
     "adhocWeightHelp": "Weight of items you paste in manually, in ranking",
+    "pollIntervalLabel": "Fetch frequency",
+    "pollIntervalHelp": "How often this source is auto-fetched (default 30 min)",
+    "weightHelp": "Higher → this source ranks earlier",
     "pasteUrl": "Paste URL",
     "typeName": {
       "youtube": "YouTube channels",

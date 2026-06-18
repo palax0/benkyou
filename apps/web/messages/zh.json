@@ -159,6 +159,9 @@
     "adhocCount": "累计 {n} 条",
     "adhocWeightLabel": "手动权重",
     "adhocWeightHelp": "你手动粘贴的内容在排序里的权重",
+    "pollIntervalLabel": "拉取频率",
+    "pollIntervalHelp": "每隔多久自动拉取一次该源（默认 30 分钟）",
+    "weightHelp": "越高 → 该源内容在排序里越靠前",
     "pasteUrl": "粘贴 URL",
     "typeName": {
       "youtube": "YouTube 频道",

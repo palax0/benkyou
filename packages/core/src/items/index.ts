@@ -1,4 +1,4 @@
-export { listFeed, getItemForUser, getItemProgress, getSourceName, getTodayStats, getSourcePipelineStatus } from './queries';
+export { listFeed, getItemForUser, getItemProgress, getSourceName, getTodayStats, getSourcePipelineStatus, getAdhocCount } from './queries';
 export type { FeedItem, ItemDetail, ItemProgress, TodayStats, SourcePipelineStatus } from './queries';
 export { buildDeepSummaryPrompt, saveDeepSummary, streamDeepSummaryResponse } from './deep-summary';
 export { pasteUrl } from './paste';

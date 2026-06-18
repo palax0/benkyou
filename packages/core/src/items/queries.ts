@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { getDbClient, items, sources } from '../db';
 import { mapStep } from './pipeline-view';
 
@@ -147,6 +147,13 @@ export interface SourcePipelineStatus {
 // thousands of done items); only the small non-terminal + failed rows are
 // materialised. NOTE: detail is fetched eagerly here — lazy-load-on-expand
 // (spec §11.3) is a deferred optimization, not built this round.
+// Count of items submitted via the paste/adhoc flow (no source_id) for the AdhocCard.
+export async function getAdhocCount(): Promise<number> {
+  const db = getDbClient();
+  const rows = await db.select({ c: sql<number>`count(*)::int` }).from(items).where(isNull(items.sourceId));
+  return rows[0]?.c ?? 0;
+}
+
 export async function getSourcePipelineStatus(sourceId: string): Promise<SourcePipelineStatus> {
   const db = getDbClient();
   const doneRows = await db
