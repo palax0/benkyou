@@ -143,10 +143,6 @@ export interface SourcePipelineStatus {
   failed: { itemId: string; title: string; error: string | null }[];
 }
 
-// Per-source pipeline summary (spec §3.4). doneCount is a COUNT (a source may have
-// thousands of done items); only the small non-terminal + failed rows are
-// materialised. NOTE: detail is fetched eagerly here — lazy-load-on-expand
-// (spec §11.3) is a deferred optimization, not built this round.
 // Count of items submitted via the paste/adhoc flow (no source_id) for the AdhocCard.
 export async function getAdhocCount(): Promise<number> {
   const db = getDbClient();
@@ -154,6 +150,10 @@ export async function getAdhocCount(): Promise<number> {
   return rows[0]?.c ?? 0;
 }
 
+// Per-source pipeline summary (spec §3.4). doneCount is a COUNT (a source may have
+// thousands of done items); only the small non-terminal + failed rows are
+// materialised. NOTE: detail is fetched eagerly here — lazy-load-on-expand
+// (spec §11.3) is a deferred optimization, not built this round.
 export async function getSourcePipelineStatus(sourceId: string): Promise<SourcePipelineStatus> {
   const db = getDbClient();
   const doneRows = await db

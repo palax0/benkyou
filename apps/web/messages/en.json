@@ -163,8 +163,6 @@
     "statusDone": "{n} done",
     "statusFailed": "{n} failed",
     "allDone": "All done · {n}",
-    "expandStatus": "Show processing detail",
-    "failedExtract": "Extract failed",
     "overview": "Overview",
     "overviewCounts": "{total} sources · {enabled} enabled · {failed} failing",
     "rssTitle": "RSS feeds",

@@ -163,8 +163,6 @@
     "statusDone": "完成 {n}",
     "statusFailed": "失败 {n}",
     "allDone": "全部完成 {n}",
-    "expandStatus": "展开处理详情",
-    "failedExtract": "提取失败",
     "overview": "总览",
     "overviewCounts": "{total} 源 · 启用 {enabled} · 失败 {failed}",
     "rssTitle": "RSS 订阅源",

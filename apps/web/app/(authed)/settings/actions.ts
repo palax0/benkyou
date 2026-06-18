@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { env } from '@benkyou/core/config';
 import { hashPassword } from '@benkyou/core/auth';
@@ -160,6 +161,7 @@ export async function updateInterestsAction(_p: SettingsState, fd: FormData): Pr
 export async function updateAppearanceAction(_p: SettingsState, fd: FormData): Promise<SettingsState> {
   await requireAuth();
   const locale = fd.get('locale') === 'en' ? 'en' : 'zh';
+  (await cookies()).set('locale', locale, { path: '/', maxAge: 31536000, sameSite: 'lax' });
   await updateSettings({ locale });
   revalidatePath('/settings');
   return { ok: true };
