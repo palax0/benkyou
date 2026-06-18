@@ -70,7 +70,12 @@ export async function toggleSourceAction(fd: FormData): Promise<void> {
   await requireAuth();
   const id = Uuid.safeParse(fd.get('id'));
   if (!id.success) return;
-  await setSourceEnabled(id.data, fd.get('enabled') === 'true');
+  const enabled = fd.get('enabled') === 'true';
+  if (enabled) {
+    const settings = await getUserSettings();
+    if (!settings || !isAiConfigured(settings)) return; // don't enable a draft into pre-AI fake-failure (spec §4.4)
+  }
+  await setSourceEnabled(id.data, enabled);
   revalidatePath('/sources');
 }
 

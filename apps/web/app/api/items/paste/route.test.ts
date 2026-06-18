@@ -9,6 +9,7 @@ vi.mock('@/lib/auth', () => ({ requireApiAuth: vi.fn(async () => null) }));
 
 import { POST } from './route';
 import { getUserSettings } from '@benkyou/core/settings';
+import { pasteUrl } from '@benkyou/core/items';
 
 describe('POST /api/items/paste readiness gate', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -28,5 +29,6 @@ describe('POST /api/items/paste readiness gate', () => {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://e.com' }),
     }));
     expect(res.status).toBe(200);
+    expect(vi.mocked(pasteUrl)).toHaveBeenCalledWith('https://e.com');
   });
 });

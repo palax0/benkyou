@@ -14,7 +14,7 @@ export interface StepView {
   transcriptSub: TranscriptStatus | null;
 }
 
-// dedup + summary are internal-only environments (spec §3.1): both surface as the
+// dedup + summary are internal-only stages (spec §3.1): both surface as the
 // fifth step ("完成") still in progress, never as their own user-facing steps.
 const STAGE_STEP_INDEX: Record<PerItemStage, number> = {
   extract: 1,
