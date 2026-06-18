@@ -235,6 +235,14 @@
     "failedAt": "在「{step}」失败",
     "retry": "重试"
   },
+  "onboarding": {
+    "title": "开始使用",
+    "step1": "配置 AI 服务",
+    "step2": "添加第一个源",
+    "step3": "看它处理入库",
+    "dismiss": "暂时收起",
+    "done": "✓"
+  },
   "shell": {
     "skipToContent": "跳到正文",
     "mainNav": "主导航",

@@ -235,6 +235,14 @@
     "failedAt": "Failed at {step}",
     "retry": "Retry"
   },
+  "onboarding": {
+    "title": "Get started",
+    "step1": "Configure AI services",
+    "step2": "Add your first source",
+    "step3": "Watch it process",
+    "dismiss": "Hide for now",
+    "done": "✓"
+  },
   "shell": {
     "skipToContent": "Skip to content",
     "mainNav": "Main navigation",

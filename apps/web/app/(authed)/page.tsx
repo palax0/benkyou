@@ -2,8 +2,10 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { listFeed, getSourceName } from '@benkyou/core/items';
+import { getOnboardingState } from '@benkyou/core/onboarding';
 import { ItemCard } from '@/components/ItemCard';
 import { CloseIcon, FeedIcon } from '@/components/shell/icons';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { PasteForm } from './items/PasteForm';
 
 const PAGE_SIZE = 30;
@@ -18,6 +20,7 @@ export default async function HomePage({
   const pageNum = Math.max(1, Number(page ?? '1') || 1);
   const feed = await listFeed({ limit: PAGE_SIZE, offset: (pageNum - 1) * PAGE_SIZE, sourceId: source });
   const sourceName = source ? await getSourceName(source) : null;
+  const onboarding = await getOnboardingState();
   // typedRoutes can't infer dynamic query strings; the path is a known static route.
   const qs = (p: number): Route =>
     (source ? `/?source=${encodeURIComponent(source)}&page=${p}` : `/?page=${p}`) as Route;
@@ -25,6 +28,8 @@ export default async function HomePage({
   return (
     <main>
       <h1 className="font-serif text-xl font-semibold tracking-tight text-ink">{t('title')}</h1>
+
+      <OnboardingChecklist state={onboarding} />
 
       <div className="mt-4 mb-2">
         <PasteForm />
