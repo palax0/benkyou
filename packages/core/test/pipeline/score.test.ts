@@ -12,11 +12,9 @@ describe('score stage pure logic', () => {
     expect(p).toContain('llm, agents');
   });
 
-  // generateObject downgrades to response_format=json_object for openai /
-  // openai-compatible providers (supportsStructuredOutputs=false) and the AI SDK
-  // does NOT auto-inject a JSON instruction. OpenAI rejects json_object mode unless
-  // the literal word "json" appears in the prompt. Keep this guard so the score
-  // stage never regresses to that runtime failure.
+  // JSON output mode can downgrade to response_format=json_object for OpenAI-family
+  // providers. Those endpoints reject the request unless the prompt mentions json,
+  // so keep this guard against regressing the score prompt contract.
   test('prompt mentions json so openai json_object mode is accepted', () => {
     const p = buildScorePrompt({ title: 't', content: 'c', interestTags: [] });
     expect(p.toLowerCase()).toContain('json');
