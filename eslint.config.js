@@ -76,8 +76,8 @@ export default [
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/consistent-type-imports': 'error',
       // Structured output must go through generateStructured(), which guarantees
-      // the json_object prompt contract across providers. Importing generateObject
-      // directly bypasses that floor and silently breaks on openai-family endpoints.
+      // the json_object prompt contract across providers and keeps deprecated
+      // generateObject imports out of call sites.
       'no-restricted-imports': [
         'error',
         {

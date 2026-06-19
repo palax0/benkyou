@@ -30,9 +30,8 @@ export function buildScorePrompt(input: {
     'Content excerpt:',
     input.content || '(no body text available; judge from the title)',
     '',
-    // The literal word "json" is required here: generateObject downgrades to
-    // response_format=json_object for openai/openai-compatible providers, which
-    // OpenAI rejects unless the prompt mentions json. See score.test.ts.
+    // The literal word "json" is required here: OpenAI-family JSON mode rejects
+    // prompts that do not mention json. See score.test.ts.
     'Return a single JSON object with these fields:',
     "- topic_tags: normalized lowercase keywords",
     "- topic_score: 0..1 relevance to the user's interests",

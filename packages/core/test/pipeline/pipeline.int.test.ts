@@ -4,20 +4,30 @@ import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import postgres from 'postgres';
 
+type GenerateTextMockOptions = { output?: { name: string } };
+
 // No real AI provider: stub the three AI SDK calls the stages make. The mock is
 // hoisted, so the dynamically-imported stages below pick it up.
-vi.mock('ai', () => ({
-  embedMany: vi.fn(async () => ({
-    embeddings: [
-      Array.from({ length: 1536 }, () => 0.01),
-      Array.from({ length: 1536 }, () => 0.02),
-    ],
-  })),
-  generateObject: vi.fn(async () => ({
-    object: { topic_tags: ['llm'], topic_score: 0.8, category: 'knowledge' },
-  })),
-  generateText: vi.fn(async () => ({ text: 'A concise one-sentence summary.' })),
-}));
+vi.mock('ai', async (importActual) => {
+  const actual = await importActual<typeof import('ai')>();
+  return {
+    ...actual,
+    embedMany: vi.fn(async () => ({
+      embeddings: [
+        Array.from({ length: 1536 }, () => 0.01),
+        Array.from({ length: 1536 }, () => 0.02),
+      ],
+    })),
+    generateText: vi.fn(async (opts: GenerateTextMockOptions = {}) =>
+      opts.output
+        ? {
+            output: { topic_tags: ['llm'], topic_score: 0.8, category: 'knowledge' },
+            totalUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+          }
+        : { text: 'A concise one-sentence summary.' },
+    ),
+  };
+});
 
 const FEED = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
