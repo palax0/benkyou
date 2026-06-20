@@ -1,8 +1,6 @@
-import { streamText } from 'ai';
 import { eq } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
-import { resolveLLM } from '../ai/provider';
-import { recordUsage } from '../ai/usage';
+import { streamTextRecorded } from '../ai/generate';
 import { buildLLMConfig, getUserSettings } from '../settings';
 import { getItemForUser } from './queries';
 
@@ -48,16 +46,9 @@ export async function streamDeepSummaryResponse(id: string): Promise<Response> {
 
   const lang = settings.locale === 'en' ? 'English' : 'Chinese';
   const cfg = buildLLMConfig(settings);
-  const result = streamText({
-    model: resolveLLM(cfg),
-    prompt: buildDeepSummaryPrompt({ title: item.title, rawContent: item.rawContent }, lang),
-    onFinish: async ({ text, usage }: { text: string; usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }) => {
-      await saveDeepSummary(id, text); // persist once on completion (spec §6.2)
-      await recordUsage(
-        { stage: 'deep_summary', itemId: id },
-        { kind: 'llm', model: cfg.model, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, totalTokens: usage?.totalTokens ?? null },
-      );
-    },
+  const result = streamTextRecorded({
+    cfg, ctx: { stage: 'deep_summary', itemId: id }, prompt: buildDeepSummaryPrompt({ title: item.title, rawContent: item.rawContent }, lang),
+    onText: async (text) => { await saveDeepSummary(id, text); },
   });
   return result.toTextStreamResponse();
 }

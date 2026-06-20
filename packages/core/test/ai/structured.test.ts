@@ -12,6 +12,11 @@ vi.mock('ai', async (importActual) => {
   };
 });
 
+// recordUsage writes to DB; stub it so these unit tests stay DB-free.
+vi.mock('../../src/ai/usage.js', () => ({
+  recordUsage: vi.fn(async () => undefined),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -64,10 +69,10 @@ describe('generateStructured', () => {
         },
         schema,
         prompt: 'Return JSON.',
+        ctx: { stage: 'test', itemId: null },
       }),
     ).resolves.toEqual({
       object: { ok: true },
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
     });
 
     const outputSpec = firstGenerateTextOutput();
@@ -82,6 +87,7 @@ describe('generateStructured', () => {
       cfg: { provider: 'openai', apiKey: 'sk-test', model: 'gpt-test' },
       schema: z.object({ ok: z.boolean() }),
       prompt: 'Return JSON.',
+      ctx: { stage: 'test', itemId: null },
       schemaName: 'response',
       schemaDescription: 'A test response.',
     });

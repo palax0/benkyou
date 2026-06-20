@@ -82,4 +82,11 @@ describe('AI call sites record usage', () => {
       SELECT stage, kind, total_tokens FROM ai_usage WHERE item_id = ${id}`;
     expect(r).toEqual([{ stage: 'summary', kind: 'llm', total_tokens: 60 }]);
   });
+
+  test('each AI stage records exactly one row (no call-site double count)', async () => {
+    const id = await seedItem('extracted');
+    await embedItem(id);
+    const r = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM ai_usage WHERE item_id = ${id}`;
+    expect(r[0]!.n).toBe(1);
+  });
 });
