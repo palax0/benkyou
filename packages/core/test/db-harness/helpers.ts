@@ -16,7 +16,7 @@ const dbBackedTestPatterns = [
   '.int.test.ts',
   'test/db.test.ts',
   'test/boss.test.ts',
-  'ai/generate.test.ts',
+  'ai/generate.test.ts', // generate.test.ts uses a real DB (createMigratedTestDatabase) but keeps .test.ts naming per the A2 plan; list it so globalSetup runs.
 ];
 
 export function shouldUseSharedDatabase(args: readonly string[]): boolean {

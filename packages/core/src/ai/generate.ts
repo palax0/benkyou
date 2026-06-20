@@ -18,7 +18,7 @@ export async function generateTextRecorded(args: {
 
 export function streamTextRecorded(args: {
   cfg: LLMConfig; ctx: UsageContext; prompt: string; onText?: (text: string) => Promise<void>;
-}): ReturnType<typeof streamText> {
+}): { toTextStreamResponse(): Response } {
   return streamText({
     model: resolveLLM(args.cfg),
     prompt: args.prompt,
@@ -39,6 +39,7 @@ export async function embedManyRecorded(args: {
     model: resolveEmbedding(args.cfg), values: args.values,
     providerOptions: embeddingProviderOptions(args.cfg),
   });
+  // Records before returning, so a dim-guard throw at the call site cannot suppress the usage row.
   await recordUsage(args.ctx, {
     kind: 'embedding', model: args.cfg.model,
     inputTokens: usage?.tokens ?? null, outputTokens: null, totalTokens: usage?.tokens ?? null,
@@ -53,6 +54,7 @@ export async function embedRecorded(args: {
     model: resolveEmbedding(args.cfg), value: args.value,
     providerOptions: embeddingProviderOptions(args.cfg),
   });
+  // Records before returning, so a dim-guard throw at the call site cannot suppress the usage row.
   await recordUsage(args.ctx, {
     kind: 'embedding', model: args.cfg.model,
     inputTokens: usage?.tokens ?? null, outputTokens: null, totalTokens: usage?.tokens ?? null,
