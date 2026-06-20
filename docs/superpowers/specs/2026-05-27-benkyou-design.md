@@ -258,12 +258,13 @@ items
   external_id     text                                              -- 源内唯一 id (RSS guid / HN id 等)
   url             text not null
   url_hash        text not null                                    -- sha256(normalize(url))，全局去重锚
+  media_url       text                                             -- download source, distinct from canonical `url`; `transcribe` pulls from `media_url ?? url`
   title           text not null
   author          text
   published_at    timestamptz
-  content_type    text not null                                    -- 'article' | 'video' | 'discussion' | 'paper'
+  content_type    text not null                                    -- 'article' | 'video' | 'audio' | 'discussion' | 'paper'
   raw_content     text                                             -- 正文 / 字幕 / 转写
-  transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'present' | 'skipped_too_long' | 'skipped_serverless' | 'unavailable'
+  transcript_status text not null default 'na'                     -- 'na' | 'pending' | 'needs_confirmation' | 'present' | 'skipped_too_long' | 'skipped_serverless' | 'unavailable'
   transcript_segments jsonb                                        -- timed transcript segments [{ start, end, text, speaker? }]；speaker 可选
   video_duration  int                                              -- 秒，仅视频
   video_kind      text                                             -- 'auto' | 'interview' | 'tutorial' | 'talk' | 'other'
@@ -454,10 +455,10 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
 - **YouTube**：先调字幕 API；有字幕直接存入 `raw_content`，并尝试解析说话人（若 API 提供）
 - **Bilibili**：调 Bilibili 字幕 API（**M2a 范围：限免登录字幕**——wbi 逐请求签名，需登录 cookie 的字幕降级为 `unavailable`，不存任何凭证；完整 cookie 支持显式不做）
 - **字幕抓取降级契约（M2a）**：YouTube / Bilibili 任何字幕抓取异常一律 catch → `transcript_status='unavailable'` + 继续 pipeline（用 title+metadata embed/score），**绝不 throw 让 item 进 `failed`**——scrape 源 fragile，缺字幕/被挡是常态不是错误（真正的瞬时错误如网络 5xx 仍可 throw 让 pg-boss 重试）
-- **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。转写决策（给定 duration + 来源类型 + 部署模式 → skip / confirm / transcribe）是 **core 的一个纯函数**（`pipeline/transcribe-policy.ts`），worker 的自动源路径与 web 的手动粘贴路径调同一份——这个策略天然横跨两层，不抽出来就会在 `apps/web` 和 `pipeline/extract` 各长一份：
+- **视频无字幕**：先取 video metadata 拿到 `video_duration`，写入 item。转写决策（给定 duration + 来源类型 + 部署模式 → skip / confirm / transcribe）是 **core 的一个纯函数**（`pipeline/transcribe-policy.ts`）——the transcribe policy runs **only in `extract`** (async paste — the web tier only creates the item; the worker probes + decides). `transcribePolicy` has a single caller.
   - `DEPLOY_MODE=serverless` → `transcript_status='skipped_serverless'`，**继续后续 pipeline**（serverless 不支持转写，见 §11.2）
   - 自动源 + `duration > video_auto_limit` → `transcript_status='skipped_too_long'`，`raw_content=null`，**继续后续 pipeline**（embed/score 只用 title + metadata；UI 显示"未转写"badge，用户可手动批准）
-  - 手动粘贴 + `duration > video_manual_limit` → 拒绝粘贴，前端报错"超过上限，请缩短或在设置里上调上限"
+  - 手动粘贴 + `duration > manual_limit` → over-`manual_limit` paste reuses `transcript_status='skipped_too_long'` and **continues** on title/metadata. Rationale: async paste + ffmpeg-worker-only means duration is known only in `extract`; a synchronous reject would force ffprobe into the web tier.
   - 手动粘贴 + `duration > video_auto_limit` 但 `< video_manual_limit` → 前端展示预估转写时长（音频分钟数；不折算金额，见 §5.3 ai_usage 注），用户勾选"确认转写"后才入队 `transcribe`
   - 其他情况 → 入队 `transcribe:item_id` 子任务（`transcript_status='pending'`）
 - **临时粘贴 URL**：识别是否为视频域名，分别走视频/文章路径
@@ -484,6 +485,8 @@ extract stage 本身只做调度：按 item 的源类型调用对应 adapter 的
 - 完成 → `transcript_status='present'`；失败超 max attempts → `transcript_status='unavailable'`（继续 embed/score 用 title）
 
 **转写与状态机的归属（关键决策，M2 前定死）**：走转写路径的 item，在 transcribe 得出终态（`present` / `unavailable`）之前 **state 停留在 `pending`** —— "extract 成功"的定义**包含转写完成**，由 transcribe 子任务在到达终态时推进 `state='extracted'` 并入队 embed。理由：embed/score/summary 都消费 `raw_content`；若 extract 先行推进，转写到货后内容已无重跑路径——runner 的 at-least-once 状态守卫（§6.1）会丢弃任何回流 job，这个守卫不能为转写开洞。被否决的备选：(a) 显式回流 re-embed——状态守卫要加例外规则，复杂度上升且引入"done 之后内容变化"的不一致窗口；(b) 转写不参与 AI 链——视频内容不可搜索、不参与评分，产品价值打折。代价与配套：extract 对长视频是分钟级 stage，`transcribe` 队列的 pg-boss 超时（`expireInSeconds`）须按 `video_manual_limit` 推算放宽；其重试计数独立于 extract（`transcript_status` 的 pending→unavailable 由 transcribe 自己的 max attempts 驱动，items.attempts 不混用）。
+
+**转写所有权与技术约束（M2b 决议）**：runner 通过泛型 `StageOutcome.advance` seam 推进状态——无 transcribe-named guard hole，guard 对所有 stage 统一。`transcribe` 是**独立队列 + 独立 dead-letter**：失败结果为 `transcript_status='unavailable'` + pipeline 继续，**永不**将 item 置 `failed`。重试上限：pg-boss `retryLimit=2`（hardcoded，独立于 `user_settings.pipeline_max_attempts`；`items.attempts` 不混用）。超时：每 job 按 `expireInSeconds = transcribeBudgetSec(durationSec)` 设置 wall-time budget——此值按音频时长计算，**不等于** `video_manual_limit`。`current_stage` 在整个 transcribe/confirm 窗口内保持 `'extract'`（转写完成由 transcribe job 推进 `state='extracted'`，`current_stage` 同步更新至 `'embed'`）。
 
 #### embed
 
@@ -943,7 +946,7 @@ DEFAULT_WHISPER_MODEL=           # 例: whisper-large-v3
 | M1 · 端到端最小闭环 | 实现完整 6-stage 状态机（**depth_score、dedup 用 stub**：前者固定 0.5，后者全部不聚类只新建 cluster），1 个 RSS 源跑通，最小 setup 流程（INITIAL_PASSWORD → 设置 LLM endpoint → 添加 RSS → 触发抓取 → 首页展示 → 详情页 lazy 深度摘要 → 搜索能找到）。**所有 user-visible 查询都按 `state='done'` 严格过滤**。 |
 | M1c · 可观测性 & 源管理 | `ai_usage` token 账本 + 四处真实 AI 调用埋点（embed / score / summary / deep_summary）；`/admin/jobs` 六段式 pipeline 面板（状态分布 / 队列健康 + 孤儿 / 处理中 / 失败 / token 消耗 / 维度漂移）+ 失败与孤儿重试；`/sources` 增删改查 + 每源拉取状态（`last_fetch_error`）+ 立即抓取；feed 卡片来源徽章 → 每源筛选；setup/settings 表单校验失败时保留已填输入。 |
 | M2a · 字幕源 & 粘贴 | YouTube 字幕 / Bilibili 字幕（**限免登录字幕**；抓取失败 → `transcript_status='unavailable'` + 继续 pipeline，绝不 fail item）/ `SourceAdapter.extract()` 重构（extract stage 变纯 dispatcher，§6.2）/ 临时 URL 粘贴（重复 URL 跳转、stage 级进度）/ transcript_status badges / pipeline 故障 banner（源连续失败 + failed items + orphans 整体健康）。**前置 migration**：search_vec 截断（§5.3）、sources.consecutive_failures。**不碰 runner/状态机**：带字幕视频走同步 `extract→extracted`；无字幕视频 M2a 暂以 `unavailable` 继续(M2b 转正，不回填)。详见 `specs/2026-06-14-benkyou-m2a-design.md` |
-| M2b · 无字幕转写 | 视频转写（chunked + diarization 解析；状态机归属见 §6.2，serverless 边界见 §11.2）/ runner 延迟推进 seam（transcribe 为唯一 consumer 与验证）/ transcribe 队列双 dispatcher 接线 + 面板可见 / transcribe-policy 的 transcribe/confirm/`skipped_serverless` 分支 / 粘贴的"确认转写 + 预估时长"子流程。**前置**：ai_usage 扩展（conversation_id / kind='transcription' / duration_seconds）+ 记账收口到 `core/ai` 封装层（删调用点埋点防双计，§5.3）。开放决策(seam 形状 / 重试计数器归属)留 M2b brainstorm |
+| M2b · 无字幕转写 | 视频转写（chunked + diarization 解析；状态机归属见 §6.2，serverless 边界见 §11.2）/ runner 延迟推进 seam（transcribe 为唯一 consumer 与验证）/ transcribe 队列双 dispatcher 接线 + 面板可见 / transcribe-policy 的 transcribe/confirm/`skipped_serverless` 分支 / 粘贴的"确认转写 + 预估时长"子流程。**前置**：ai_usage 扩展（conversation_id / kind='transcription' / duration_seconds）+ 记账收口到 `core/ai` 封装层（删调用点埋点防双计，§5.3）。**M2b 决议**：seam 形状 → 泛型 `StageOutcome.advance`（无 transcribe guard hole）；重试计数器归属 → pg-boss `retryLimit=2`，`items.attempts` 不混用；`skipped_serverless` 表达 → policy branch 1；job 超时模型 → per-job `transcribeBudgetSec(durationSec)`；`current_stage` 归属 → 整个 transcribe/confirm 窗口保持 `'extract'`。 |
 | M3 · AI 全开 | 把 score stub 换成真 LLM 评分（A 主题相关 + B 深度分 + category）、dedup 真实聚类（队列并发=1，§6.2）、日报生成（user_settings.timezone 定日界）、视频类型 prompt 分支、final_score 抽单一实现（§6.3）、模型漂移检测（§6.4） |
 | M4 · Agent | 4 个工具实现、tool-use 循环、SSE 流式、独立 `/chat` 页 + 右下浮动抽屉双形态、对话历史 |
 | M5 · Onboarding 打磨 | 默认源推荐列表 / 兴趣标签建议 / setup 步骤文案 / 深色模式 / 移动端响应式 / UI 细节 polish |
