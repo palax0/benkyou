@@ -1,6 +1,7 @@
 import { asSchema, generateText, Output } from 'ai';
 import type { z } from 'zod';
 import { resolveLLM, type LLMConfig } from './provider';
+import { recordUsage, type UsageContext } from './usage';
 
 const JSON_INSTRUCTION = 'Respond with a single JSON object.';
 
@@ -19,6 +20,7 @@ export interface GenerateStructuredOptions<T> {
   cfg: LLMConfig;
   schema: z.ZodType<T>;
   prompt: string;
+  ctx: UsageContext;
   schemaName?: string;
   schemaDescription?: string;
 }
@@ -50,7 +52,7 @@ async function promptWithJsonSchema<T>(opts: GenerateStructuredOptions<T>): Prom
 
 export async function generateStructured<T>(
   opts: GenerateStructuredOptions<T>,
-): Promise<{ object: T; usage: StructuredUsage }> {
+): Promise<{ object: T }> {
   if (usesOpenAICompatibleJsonObjectMode(opts.cfg)) {
     // @ai-sdk/openai-compatible warns when a schema is passed while
     // supportsStructuredOutputs=false. Keep wire mode at json_object and validate
@@ -63,14 +65,16 @@ export async function generateStructured<T>(
       }),
       prompt: await promptWithJsonSchema(opts),
     });
-    return {
-      object: await opts.schema.parseAsync(result.output),
-      usage: {
-        inputTokens: result.totalUsage?.inputTokens ?? null,
-        outputTokens: result.totalUsage?.outputTokens ?? null,
-        totalTokens: result.totalUsage?.totalTokens ?? null,
-      },
+    const usage = {
+      inputTokens: result.totalUsage?.inputTokens ?? null,
+      outputTokens: result.totalUsage?.outputTokens ?? null,
+      totalTokens: result.totalUsage?.totalTokens ?? null,
     };
+    await recordUsage(opts.ctx, {
+      kind: 'llm', model: opts.cfg.model,
+      inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
+    });
+    return { object: await opts.schema.parseAsync(result.output) };
   }
 
   const result = await generateText({
@@ -82,12 +86,14 @@ export async function generateStructured<T>(
     }),
     prompt: ensureJsonInstruction(opts.prompt),
   });
-  return {
-    object: result.output,
-    usage: {
-      inputTokens: result.totalUsage?.inputTokens ?? null,
-      outputTokens: result.totalUsage?.outputTokens ?? null,
-      totalTokens: result.totalUsage?.totalTokens ?? null,
-    },
+  const usage = {
+    inputTokens: result.totalUsage?.inputTokens ?? null,
+    outputTokens: result.totalUsage?.outputTokens ?? null,
+    totalTokens: result.totalUsage?.totalTokens ?? null,
   };
+  await recordUsage(opts.ctx, {
+    kind: 'llm', model: opts.cfg.model,
+    inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens,
+  });
+  return { object: result.output };
 }

@@ -16,6 +16,7 @@ const dbBackedTestPatterns = [
   '.int.test.ts',
   'test/db.test.ts',
   'test/boss.test.ts',
+  'ai/generate.test.ts',
 ];
 
 export function shouldUseSharedDatabase(args: readonly string[]): boolean {
