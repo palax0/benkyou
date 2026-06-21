@@ -25,12 +25,6 @@ export interface GenerateStructuredOptions<T> {
   schemaDescription?: string;
 }
 
-export interface StructuredUsage {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-}
-
 function usesOpenAICompatibleJsonObjectMode(cfg: LLMConfig): boolean {
   return cfg.provider === 'openai-compatible' || cfg.provider === 'ollama';
 }
