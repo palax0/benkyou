@@ -19,8 +19,14 @@ export function transcribeBudgetSec(durationSec: number): number {
   return Math.ceil(durationSec * TRANSCRIBE_TIME_FACTOR) + TRANSCRIBE_FIXED_OVERHEAD_SEC;
 }
 
-// Queue-wide backstop only (sized for a worst-case ~12h job); the real budget is per-job.
-export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = transcribeBudgetSec(43_200);
+// pg-boss 12 validates expireInSeconds / 3600 < 24 (strict less-than), so the usable
+// ceiling is 86399s. Jobs longer than ~11.25h audio will use this ceiling rather than
+// the formula value. The backstop serves the same cap.
+const PG_BOSS_MAX_EXPIRE_SEC = 86_399;
+
+// Queue-wide backstop (fallback for any job that escaped per-send expiry or where
+// per-send override is not honored). Capped at pg-boss's 24h limit.
+export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = PG_BOSS_MAX_EXPIRE_SEC;
 
 export async function enqueueTranscribe(
   boss: PgBoss, itemId: string, opts: { durationSec: number },
@@ -28,7 +34,7 @@ export async function enqueueTranscribe(
   // singletonKey makes a redelivered extract's re-enqueue a no-op while a transcribe
   // job for this item is still live — an expensive stage must not double-bill Whisper.
   await boss.send(TRANSCRIBE_QUEUE, { itemId } satisfies TranscribeJob, {
-    expireInSeconds: transcribeBudgetSec(opts.durationSec),
+    expireInSeconds: Math.min(transcribeBudgetSec(opts.durationSec), PG_BOSS_MAX_EXPIRE_SEC),
     singletonKey: itemId,
   });
 }

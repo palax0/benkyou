@@ -10,7 +10,9 @@ import {
   recordFailure,
 } from '../pipeline/state';
 import { ingestSource } from '../pipeline/ingest';
-import { enqueueStage, type IngestJob, type StageJob } from './queues';
+import { enqueueStage, type IngestJob, type StageJob, type TranscribeJob } from './queues';
+import { getTranscribeView, writeTranscript, setTranscriptStatus, advancePendingToExtracted } from '../pipeline/transcribe-store';
+import { transcribeItem } from '../pipeline/transcribe';
 
 export async function runItemStage(boss: PgBoss, job: StageJob): Promise<void> {
   const { itemId, stage } = job;
@@ -44,4 +46,29 @@ export async function runIngest(boss: PgBoss, job: IngestJob): Promise<number> {
 // Dead-letter handler = the spec's "onFail" callback: terminal failure.
 export async function handleDeadLetter(job: StageJob): Promise<void> {
   await markFailed(job.itemId, job.stage);
+}
+
+export async function runTranscribe(boss: PgBoss, { itemId }: TranscribeJob): Promise<void> {
+  const item = await getTranscribeView(itemId);
+  // Own at-least-once guard: drop a redelivered/out-of-order job.
+  if (item?.state !== 'pending' || item.transcriptStatus !== 'pending') return;
+  try {
+    const { segments, flatText, durationSec } = await transcribeItem(item);
+    await writeTranscript(itemId, { segments, flatText, durationSec });
+    await advanceAfterTranscribe(boss, itemId);
+  } catch (err) {
+    await recordFailure(itemId, err); // last_error only; state untouched
+    throw err;                        // retryLimit=2 → TRANSCRIBE_DEAD_LETTER
+  }
+}
+
+// Terminal: degrade + CONTINUE (never markFailed — that handler sets state='failed').
+export async function handleTranscribeDeadLetter(boss: PgBoss, { itemId }: TranscribeJob): Promise<void> {
+  await setTranscriptStatus(itemId, 'unavailable'); // raw_content stays title/show-notes only
+  await advanceAfterTranscribe(boss, itemId);
+}
+
+async function advanceAfterTranscribe(boss: PgBoss, itemId: string): Promise<void> {
+  const advanced = await advancePendingToExtracted(itemId);
+  if (advanced) await enqueueStage(boss, 'embed', itemId);
 }
