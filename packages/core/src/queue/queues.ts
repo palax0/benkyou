@@ -7,6 +7,32 @@ import { PER_ITEM_STAGES, type PerItemStage } from '../pipeline';
 export const INGEST_QUEUE = 'ingest';
 export const DEAD_LETTER_QUEUE = 'failed-items';
 
+export const TRANSCRIBE_QUEUE = 'transcribe';
+export const TRANSCRIBE_DEAD_LETTER = 'transcribe-failed';
+export interface TranscribeJob { itemId: string }
+
+export const TRANSCRIBE_TIME_FACTOR = 2;           // download + ffmpeg + concurrent Whisper wall-time
+export const TRANSCRIBE_FIXED_OVERHEAD_SEC = 900;  // connection setup, first-byte latency, ffmpeg spin-up
+
+// Processing wall-time budget — NOT the audio length, and never = video_manual_limit (decision #6).
+export function transcribeBudgetSec(durationSec: number): number {
+  return Math.ceil(durationSec * TRANSCRIBE_TIME_FACTOR) + TRANSCRIBE_FIXED_OVERHEAD_SEC;
+}
+
+// Queue-wide backstop only (sized for a worst-case ~12h job); the real budget is per-job.
+export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = transcribeBudgetSec(43_200);
+
+export async function enqueueTranscribe(
+  boss: PgBoss, itemId: string, opts: { durationSec: number },
+): Promise<void> {
+  // singletonKey makes a redelivered extract's re-enqueue a no-op while a transcribe
+  // job for this item is still live — an expensive stage must not double-bill Whisper.
+  await boss.send(TRANSCRIBE_QUEUE, { itemId } satisfies TranscribeJob, {
+    expireInSeconds: transcribeBudgetSec(opts.durationSec),
+    singletonKey: itemId,
+  });
+}
+
 export interface StageJob {
   itemId: string;
   stage: PerItemStage;
@@ -32,6 +58,16 @@ export async function registerQueues(boss: PgBoss): Promise<void> {
     await boss.createQueue(stage, policy);
     await boss.updateQueue(stage, policy);
   }
+  // transcribe is NOT a PER_ITEM_STAGES member — its retryLimit=2 is hardcoded and
+  // independent of user_settings.pipeline_max_attempts. The loop above must not touch it.
+  await boss.createQueue(TRANSCRIBE_DEAD_LETTER);
+  const transcribePolicy = {
+    retryLimit: 2, retryBackoff: true,
+    deadLetter: TRANSCRIBE_DEAD_LETTER,
+    expireInSeconds: TRANSCRIBE_EXPIRY_BACKSTOP_SEC,
+  };
+  await boss.createQueue(TRANSCRIBE_QUEUE, transcribePolicy);
+  await boss.updateQueue(TRANSCRIBE_QUEUE, transcribePolicy);
 }
 
 export async function enqueueIngest(boss: PgBoss, sourceId: string): Promise<void> {
