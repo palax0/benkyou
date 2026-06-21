@@ -106,8 +106,13 @@
       "present": "字幕",
       "unavailable": "无字幕",
       "pending": "转写中",
-      "na": ""
-    }
+      "na": "",
+      "needs_confirmation": "待确认转写",
+      "skipped_too_long": "超时长未转写",
+      "skipped_serverless": "无服务端转写"
+    },
+    "confirmTranscribe": "确认转写({minutes} 分钟)",
+    "confirming": "提交中…"
   },
   "search": {
     "title": "搜索",

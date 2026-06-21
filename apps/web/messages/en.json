@@ -106,8 +106,13 @@
       "present": "Subtitles",
       "unavailable": "No subtitles",
       "pending": "Transcribing",
-      "na": ""
-    }
+      "na": "",
+      "needs_confirmation": "Awaiting confirmation",
+      "skipped_too_long": "Too long — skipped",
+      "skipped_serverless": "Transcription off (serverless)"
+    },
+    "confirmTranscribe": "Transcribe (~{minutes} min)",
+    "confirming": "Submitting…"
   },
   "search": {
     "title": "Search",

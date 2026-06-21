@@ -14,6 +14,7 @@ export interface FeedItem {
   sourceName: string | null;
   bookmarked: boolean;
   transcriptStatus: string;
+  mediaUrl: string | null;
 }
 
 export interface ItemDetail extends FeedItem {
@@ -23,6 +24,7 @@ export interface ItemDetail extends FeedItem {
   deepSummary: string | null;
   author: string | null;
   topicTags: string[] | null;
+  mediaUrl: string | null;
 }
 
 const FEED_COLUMNS = {
@@ -37,6 +39,7 @@ const FEED_COLUMNS = {
   sourceId: items.sourceId,
   sourceName: sources.name,
   transcriptStatus: items.transcriptStatus,
+  mediaUrl: items.mediaUrl,
 };
 
 export async function listFeed(opts: {
@@ -118,6 +121,7 @@ export interface ItemProgress {
   currentStage: string | null;
   lastError: string | null;
   transcriptStatus: string;
+  durationSec: number | null;
 }
 
 export async function getItemProgress(id: string): Promise<ItemProgress | null> {
@@ -130,6 +134,7 @@ export async function getItemProgress(id: string): Promise<ItemProgress | null> 
       currentStage: items.currentStage,
       lastError: items.lastError,
       transcriptStatus: items.transcriptStatus,
+      durationSec: items.videoDuration,
     })
     .from(items)
     .where(eq(items.id, id))
