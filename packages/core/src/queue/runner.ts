@@ -12,7 +12,7 @@ import {
 } from '../pipeline/state';
 import { ingestSource } from '../pipeline/ingest';
 import { enqueueStage, type IngestJob, type StageJob, type TranscribeJob } from './queues';
-import { getTranscribeView, writeTranscript, setTranscriptStatus, advancePendingToExtracted } from '../pipeline/transcribe-store';
+import { getTranscribeView, writeTranscriptAndAdvance, degradeTranscriptAndAdvance } from '../pipeline/transcribe-store';
 import { transcribeItem } from '../pipeline/transcribe';
 
 export async function runItemStage(boss: PgBoss, job: StageJob): Promise<void> {
@@ -57,8 +57,9 @@ export async function runTranscribe(boss: PgBoss, { itemId }: TranscribeJob): Pr
   if (item?.state !== 'pending' || item.transcriptStatus !== 'pending') return;
   try {
     const { segments, flatText, durationSec } = await transcribeItem(item);
-    await writeTranscript(itemId, { segments, flatText, durationSec });
-    await advanceAfterTranscribe(boss, itemId);
+    // Atomic write+advance; enqueue embed only after it committed the state move.
+    const advanced = await writeTranscriptAndAdvance(itemId, { segments, flatText, durationSec });
+    if (advanced) await enqueueStage(boss, 'embed', itemId);
   } catch (err) {
     await recordFailure(itemId, err); // last_error only; state untouched
     throw err;                        // retryLimit=2 → TRANSCRIBE_DEAD_LETTER
@@ -67,11 +68,6 @@ export async function runTranscribe(boss: PgBoss, { itemId }: TranscribeJob): Pr
 
 // Terminal: degrade + CONTINUE (never markFailed — that handler sets state='failed').
 export async function handleTranscribeDeadLetter(boss: PgBoss, { itemId }: TranscribeJob): Promise<void> {
-  await setTranscriptStatus(itemId, 'unavailable'); // raw_content stays title/show-notes only
-  await advanceAfterTranscribe(boss, itemId);
-}
-
-async function advanceAfterTranscribe(boss: PgBoss, itemId: string): Promise<void> {
-  const advanced = await advancePendingToExtracted(itemId);
+  const advanced = await degradeTranscriptAndAdvance(itemId);
   if (advanced) await enqueueStage(boss, 'embed', itemId);
 }

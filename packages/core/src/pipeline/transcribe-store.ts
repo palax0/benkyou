@@ -20,31 +20,46 @@ export async function getTranscribeView(itemId: string): Promise<TranscribeView 
   return { ...r, isAdhoc: r.sourceId == null };
 }
 
-export async function writeTranscript(
-  itemId: string, data: { segments: TranscriptSegment[]; flatText: string; durationSec: number },
-): Promise<void> {
-  const db = getDbClient();
-  await db.update(items).set({
-    transcriptStatus: 'present',
-    transcriptSegments: data.segments,
-    rawContent: data.flatText,
-    videoDuration: data.durationSec,
-    updatedAt: sql`now()`,
-  }).where(eq(items.id, itemId));
-}
-
 export async function setTranscriptStatus(itemId: string, status: TranscriptStatus): Promise<void> {
   const db = getDbClient();
   await db.update(items).set({ transcriptStatus: status, updatedAt: sql`now()` }).where(eq(items.id, itemId));
 }
 
-// Conditional advance guarded on state='pending' so a redelivered success OR a
-// dead-letter re-run is a no-op. This is the ONLY place current_stage leaves 'extract'
-// for a transcribed item (decision #7). Mirrors completeStage's reset of attempts/error.
-export async function advancePendingToExtracted(itemId: string): Promise<boolean> {
+// Both transcribe terminal paths (success / dead-letter degrade) write the finalized
+// transcript_status AND the state advance in ONE guarded UPDATE. Splitting them left a
+// window where transcript_status was 'present'/'unavailable' while the row was still
+// parked at current_stage='extract'; orphan recovery (retryItem re-runs current_stage)
+// would then re-enter extract, where isTranscribeEligible=false routes the raw media URL
+// through the ARTICLE adapter and clobbers raw_content. Folding both columns into the
+// same statement means there is never such a row. This is also the ONLY place
+// current_stage leaves 'extract' for a transcribed item (decision #7).
+//
+// Guard on state='pending' makes a redelivered success — or a dead-letter that fires
+// after a successful delivery already advanced — a no-op (returns false → no embed
+// enqueue), and stops the dead-letter from overwriting a good 'present' with 'unavailable'.
+// Mirrors completeStage's reset of attempts/error.
+
+export async function writeTranscriptAndAdvance(
+  itemId: string, data: { segments: TranscriptSegment[]; flatText: string; durationSec: number },
+): Promise<boolean> {
   const db = getDbClient();
   const rows = await db.update(items).set({
-    state: 'extracted', currentStage: 'embed', attempts: 0, lastError: null, updatedAt: sql`now()`,
+    transcriptStatus: 'present',
+    transcriptSegments: data.segments,
+    rawContent: data.flatText,
+    videoDuration: data.durationSec,
+    state: 'extracted', currentStage: 'embed', attempts: 0, lastError: null,
+    updatedAt: sql`now()`,
+  }).where(and(eq(items.id, itemId), eq(items.state, 'pending'))).returning({ id: items.id });
+  return rows.length > 0;
+}
+
+export async function degradeTranscriptAndAdvance(itemId: string): Promise<boolean> {
+  const db = getDbClient();
+  const rows = await db.update(items).set({
+    transcriptStatus: 'unavailable', // raw_content stays title/show-notes only
+    state: 'extracted', currentStage: 'embed', attempts: 0, lastError: null,
+    updatedAt: sql`now()`,
   }).where(and(eq(items.id, itemId), eq(items.state, 'pending'))).returning({ id: items.id });
   return rows.length > 0;
 }

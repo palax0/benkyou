@@ -78,4 +78,17 @@ describe('runTranscribe + terminal', () => {
     const r = await sql<{ state: string }[]>`SELECT state FROM items WHERE id=${id}`;
     expect(r[0]!.state).toBe('extracted');
   });
+
+  test('dead-letter after a successful delivery does not clobber the present transcript', async () => {
+    // Success-then-dead-letter race: the success delivery committed (state=extracted,
+    // transcript_status=present) but its ack was lost, so pg-boss retried to exhaustion
+    // and still fired the dead-letter. The state='pending'-guarded degrade must be a
+    // no-op — never overwrite a good 'present' transcript with 'unavailable'.
+    const id = await seed();
+    await runTranscribe(boss, { itemId: id });             // success → present + extracted
+    await handleTranscribeDeadLetter(boss, { itemId: id }); // late dead-letter
+    const r = await sql<{ state: string; current_stage: string; transcript_status: string; raw_content: string }[]>`
+      SELECT state, current_stage, transcript_status, raw_content FROM items WHERE id=${id}`;
+    expect(r[0]).toMatchObject({ state: 'extracted', current_stage: 'embed', transcript_status: 'present', raw_content: 'hi' });
+  });
 });

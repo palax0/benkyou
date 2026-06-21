@@ -18,5 +18,5 @@ export type { IngestResult } from './ingest';
 export * from './state';
 export * from './status';
 export * from './retry';
-export { getTranscribeView, writeTranscript, setTranscriptStatus, advancePendingToExtracted } from './transcribe-store';
+export { getTranscribeView, setTranscriptStatus, writeTranscriptAndAdvance, degradeTranscriptAndAdvance } from './transcribe-store';
 export type { TranscribeView } from './transcribe-store';
