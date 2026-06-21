@@ -48,6 +48,21 @@ describe('runTranscribe + terminal', () => {
     expect(r[0]!.state).toBe('pending'); // untouched
   });
 
+  test('guard drops a job whose state is not pending (transcript_status still pending)', async () => {
+    // Seeds state='extracted', transcript_status='pending' — the item has already advanced
+    // past the pending state (e.g. redelivery after a crash mid-advance). The runner must
+    // short-circuit without calling transcribeItem or writing any transcript data.
+    const r = await sql<{ id: string }[]>`
+      INSERT INTO items (url, url_hash, title, content_type, media_url, video_duration, transcript_status, state, current_stage)
+      VALUES ('https://cdn/'||gen_random_uuid()||'.mp3', gen_random_uuid()::text, 'T', 'audio', 'https://cdn/a.mp3', 120, 'pending', 'extracted', 'embed')
+      RETURNING id`;
+    const id = r[0]!.id;
+    await runTranscribe(boss, { itemId: id });
+    const row = await sql<{ state: string; transcript_status: string }[]>`
+      SELECT state, transcript_status FROM items WHERE id=${id}`;
+    expect(row[0]).toMatchObject({ state: 'extracted', transcript_status: 'pending' }); // untouched
+  });
+
   test('dead-letter degrades to unavailable + extracted + current_stage=embed (NOT failed)', async () => {
     const id = await seed();
     await handleTranscribeDeadLetter(boss, { itemId: id });

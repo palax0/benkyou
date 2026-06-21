@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
-import type { TranscriptSegment } from '../sources/types';
+import type { TranscriptSegment, TranscriptStatus } from '../sources/types';
 
 export interface TranscribeView {
   id: string; state: string; transcriptStatus: string;
@@ -33,7 +33,7 @@ export async function writeTranscript(
   }).where(eq(items.id, itemId));
 }
 
-export async function setTranscriptStatus(itemId: string, status: string): Promise<void> {
+export async function setTranscriptStatus(itemId: string, status: TranscriptStatus): Promise<void> {
   const db = getDbClient();
   await db.update(items).set({ transcriptStatus: status, updatedAt: sql`now()` }).where(eq(items.id, itemId));
 }

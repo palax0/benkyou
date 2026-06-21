@@ -18,7 +18,8 @@ export type TranscriptStatus =
   | 'present'
   | 'skipped_too_long'
   | 'skipped_serverless'
-  | 'unavailable';
+  | 'unavailable'
+  | 'needs_confirmation'; // B7 transcribe/confirm sub-flow: item parked awaiting manual review
 
 // Article extraction observability (design §4.1). 'ok' = no needed enhancement
 // step failed (adequate feed OR a successful direct/reader fetch — a legit short

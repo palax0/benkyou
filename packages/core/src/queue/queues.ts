@@ -24,8 +24,11 @@ export function transcribeBudgetSec(durationSec: number): number {
 // the formula value. The backstop serves the same cap.
 const PG_BOSS_MAX_EXPIRE_SEC = 86_399;
 
-// Queue-wide backstop (fallback for any job that escaped per-send expiry or where
-// per-send override is not honored). Capped at pg-boss's 24h limit.
+// Queue-wide wall-time backstop: catches any job that escaped per-send expiry or where
+// the per-send override was not honored (e.g. a redelivery that lost its original TTL).
+// Flat 86399 rather than transcribeBudgetSec(maxDuration) because pg-boss hard-rejects
+// expireInSeconds >= 24h (validates value / 3600 < 24); the formula can exceed that for
+// very long audio, so we use the highest safe constant instead.
 export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = PG_BOSS_MAX_EXPIRE_SEC;
 
 export async function enqueueTranscribe(
