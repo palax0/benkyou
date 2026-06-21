@@ -3,14 +3,16 @@ import { getDbClient, aiUsage } from '../db';
 export interface UsageContext {
   stage: string;
   itemId?: string | null;
+  conversationId?: string | null;
 }
 
 export interface UsageFields {
-  kind: 'llm' | 'embedding';
+  kind: 'llm' | 'embedding' | 'transcription';
   model: string;
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  durationSeconds?: number | null;
 }
 
 function finiteOrNull(value: number | null): number | null {
@@ -32,6 +34,8 @@ export async function recordUsage(ctx: UsageContext, fields: UsageFields): Promi
       inputTokens: finiteOrNull(fields.inputTokens),
       outputTokens: finiteOrNull(fields.outputTokens),
       totalTokens: finiteOrNull(fields.totalTokens),
+      durationSeconds: finiteOrNull(fields.durationSeconds ?? null),
+      conversationId: ctx.conversationId ?? null,
     });
   } catch (err) {
     console.error('[ai_usage] record failed:', err instanceof Error ? err.message : err);

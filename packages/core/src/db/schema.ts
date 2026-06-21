@@ -191,11 +191,14 @@ export const aiUsage = pgTable(
     // agent/search calls have no item; keep the ledger row after the item is deleted.
     itemId: uuid('item_id').references(() => items.id, { onDelete: 'set null' }),
     stage: text('stage').notNull(), // 'embed' | 'score' | 'summary' | 'deep_summary' | (M3+ more)
-    kind: text('kind').notNull(), // 'llm' | 'embedding'
+    kind: text('kind').notNull(), // 'llm' | 'embedding' | 'transcription'
     model: text('model').notNull(),
     inputTokens: integer('input_tokens'),
     outputTokens: integer('output_tokens'), // NULL for embeddings
     totalTokens: integer('total_tokens'),
+    durationSeconds: integer('duration_seconds'), // transcription has no tokens; audio seconds instead
+    // null until M4 (agent/search threads); migrated now while the table is small (spec §5.3)
+    conversationId: uuid('conversation_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (t) => ({
