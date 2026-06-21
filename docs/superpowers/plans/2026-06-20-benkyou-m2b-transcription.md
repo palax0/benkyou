@@ -793,7 +793,7 @@ git commit -m "feat(core): pure transcribePolicy decision function"
 - Produces:
   - `TRANSCRIBE_QUEUE = 'transcribe'`, `TRANSCRIBE_DEAD_LETTER = 'transcribe-failed'`
   - `interface TranscribeJob { itemId: string }`
-  - `TRANSCRIBE_TIME_FACTOR = 2`, `TRANSCRIBE_FIXED_OVERHEAD_SEC = 900`, `TRANSCRIBE_EXPIRY_BACKSTOP_SEC` (= `transcribeBudgetSec(43200)`)
+  - `TRANSCRIBE_TIME_FACTOR = 2`, `TRANSCRIBE_FIXED_OVERHEAD_SEC = 900`, `TRANSCRIBE_EXPIRY_BACKSTOP_SEC` (= `PG_BOSS_MAX_EXPIRE_SEC = 86_399`; see caveat below — pg-boss 12 hard-rejects `expireInSeconds >= 24h`, so the formula `transcribeBudgetSec(43200) = 87300` is unshippable and is clamped)
   - `transcribeBudgetSec(durationSec: number): number`
   - `enqueueTranscribe(boss, itemId, opts: { durationSec: number }): Promise<void>`
 
@@ -841,8 +841,15 @@ export function transcribeBudgetSec(durationSec: number): number {
   return Math.ceil(durationSec * TRANSCRIBE_TIME_FACTOR) + TRANSCRIBE_FIXED_OVERHEAD_SEC;
 }
 
-// Queue-wide backstop only (sized for a worst-case ~12h job); the real budget is per-job.
-export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = transcribeBudgetSec(43_200);
+// pg-boss 12 validates expireInSeconds / 3600 < 24 (strict less-than), so the usable
+// ceiling is 86399s. Jobs longer than ~11.25h audio would compute a budget above this and
+// must be clamped, not rejected at send.
+const PG_BOSS_MAX_EXPIRE_SEC = 86_399;
+
+// Queue-wide backstop only; the real budget is per-job. Flat 86399 rather than
+// transcribeBudgetSec(43_200) (= 87300) because pg-boss hard-rejects expireInSeconds >= 24h —
+// the formula exceeds that for a ~12h job, so the backstop pins to the ceiling.
+export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = PG_BOSS_MAX_EXPIRE_SEC;
 
 export async function enqueueTranscribe(
   boss: PgBoss, itemId: string, opts: { durationSec: number },
@@ -850,13 +857,14 @@ export async function enqueueTranscribe(
   // singletonKey makes a redelivered extract's re-enqueue a no-op while a transcribe
   // job for this item is still live — an expensive stage must not double-bill Whisper.
   await boss.send(TRANSCRIBE_QUEUE, { itemId } satisfies TranscribeJob, {
-    expireInSeconds: transcribeBudgetSec(opts.durationSec),
+    // Clamp to the pg-boss ceiling; still a wall-time budget, never = video_manual_limit.
+    expireInSeconds: Math.min(transcribeBudgetSec(opts.durationSec), PG_BOSS_MAX_EXPIRE_SEC),
     singletonKey: itemId,
   });
 }
 ```
 
-> **Verify (decision #6 caveat):** confirm pg-boss 12 honors per-`send` `expireInSeconds` over the queue policy default. If a quick integration probe shows it does NOT, fall back to a queue-wide `expireInSeconds: TRANSCRIBE_EXPIRY_BACKSTOP_SEC` and document it — still a wall-time budget with a safety factor, never `= video_manual_limit`.
+> **Resolved (decision #6 caveat):** pg-boss 12 honors per-`send` `expireInSeconds`, but it also hard-rejects any `expireInSeconds >= 24h` (validates `value / 3600 < 24`). The per-job budget and the queue backstop are therefore clamped to `PG_BOSS_MAX_EXPIRE_SEC = 86_399` via `Math.min`. The clamp only engages above ~11.9h of audio, is still a wall-time budget with a safety factor, and never `= video_manual_limit`. (Original plan text specified `transcribeBudgetSec(43_200) = 87300`, which is unshippable as written — corrected post-implementation.)
 
 - [ ] **Step 4: Register the transcribe queue + dead-letter in `registerQueues`**
 
