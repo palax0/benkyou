@@ -24,7 +24,6 @@ export interface ItemDetail extends FeedItem {
   deepSummary: string | null;
   author: string | null;
   topicTags: string[] | null;
-  mediaUrl: string | null;
 }
 
 const FEED_COLUMNS = {

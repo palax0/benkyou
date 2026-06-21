@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { assertHttpUrl, TRANSCRIBE_MAX_BYTES, downloadToTmp, isBlockedAddress, assertSafeHttpUrl } from '../../src/pipeline/media-probe.js';
 
 // vi.mock must be at module top-level (hoisted). We mock dns/promises globally and control
@@ -6,6 +6,11 @@ import { assertHttpUrl, TRANSCRIBE_MAX_BYTES, downloadToTmp, isBlockedAddress, a
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(),
 }));
+
+// Restore spies (notably the fetch spyOn) after every test so mock state never leaks.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('media-probe guards', () => {
   test('accepts http and https', () => {
@@ -98,7 +103,6 @@ test('streaming download aborts when the body exceeds the ceiling despite a smal
     new Response(huge, { status: 200, headers: { 'content-length': '10' } }),
   );
   await expect(downloadToTmp('https://cdn/a.mp3', 1024)).rejects.toThrow(/byte ceiling/);
-  vi.restoreAllMocks();
 });
 
 describe('downloadToTmp redirect SSRF guard', () => {
@@ -118,8 +122,6 @@ describe('downloadToTmp redirect SSRF guard', () => {
     await expect(downloadToTmp('https://feed.example/a.mp3')).rejects.toThrow(/private\/internal/);
     // The redirect target is an IP literal — assertSafeHttpUrl blocks it before issuing a second fetch
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-    vi.restoreAllMocks();
   });
 
   test('public-to-public redirect followed by a 200 resolves to {path, cleanup}', async () => {
@@ -150,7 +152,5 @@ describe('downloadToTmp redirect SSRF guard', () => {
     expect(typeof result.cleanup).toBe('function');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     await result.cleanup();
-
-    vi.restoreAllMocks();
   });
 });
