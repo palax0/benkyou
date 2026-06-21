@@ -190,6 +190,8 @@ export async function assertSafeHttpUrl(rawUrl: string): Promise<URL> {
 // ffprobe reads only headers / the moov atom (a few hundred KB) over the network.
 // Returns null when the URL resolves but is not parseable media (→ caller degrades to
 // unavailable). Throws on a transient failure (→ caller's extract retry consumes attempts).
+// assertSafeHttpUrl can also throw a PERMANENT rejection (blocked address / bad scheme)
+// that is not transient and should not be retried.
 // SSRF guard runs via assertSafeHttpUrl before any network/child-process call.
 export async function probeRemoteDurationSec(mediaUrl: string): Promise<number | null> {
   await assertSafeHttpUrl(mediaUrl);
@@ -212,12 +214,21 @@ export async function probeRemoteDurationSec(mediaUrl: string): Promise<number |
 }
 
 // Streaming download with a hard byte ceiling that aborts even if Content-Length lied.
-// Scheme allowlist + redirect cap. Caller MUST call cleanup() in finally.
-// SSRF guard runs via assertSafeHttpUrl before any network/child-process call.
+// Redirects are followed manually — each hop is re-validated against the IP denylist via
+// assertSafeHttpUrl, closing the redirect-to-metadata bypass (SSRF via 302 to internal IP).
+// Capped at 5 hops. Caller MUST call cleanup() in finally.
 export async function downloadToTmp(mediaUrl: string, maxBytes = TRANSCRIBE_MAX_BYTES): Promise<{ path: string; cleanup: () => Promise<void> }> {
-  await assertSafeHttpUrl(mediaUrl);
-  const res = await fetch(mediaUrl, { redirect: 'follow' });
-  if (!res.ok || !res.body) throw new Error(`Media download failed: ${res.status} ${res.statusText}`);
+  let current: URL = await assertSafeHttpUrl(mediaUrl);
+  let res: Response;
+  for (let hop = 0; ; hop++) {
+    if (hop > 5) throw new Error('Media download exceeded redirect cap');
+    res = await fetch(current, { redirect: 'manual' });
+    if (res.status < 300 || res.status >= 400) break; // not a redirect → final response
+    const loc = res.headers.get('location');
+    if (!loc) break; // 3xx without Location → treat as final, let the ok/body check below handle it
+    current = await assertSafeHttpUrl(new URL(loc, current).toString()); // re-validate each redirect target (resolves relative Location)
+  }
+  if (!res!.ok || !res!.body) throw new Error(`Media download failed: ${res!.status} ${res!.statusText}`);
   const declared = Number(res.headers.get('content-length') ?? '');
   if (Number.isFinite(declared) && declared > maxBytes) {
     throw new Error(`Media exceeds byte ceiling (Content-Length ${declared} > ${maxBytes})`);

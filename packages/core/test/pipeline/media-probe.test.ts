@@ -100,3 +100,57 @@ test('streaming download aborts when the body exceeds the ceiling despite a smal
   await expect(downloadToTmp('https://cdn/a.mp3', 1024)).rejects.toThrow(/byte ceiling/);
   vi.restoreAllMocks();
 });
+
+describe('downloadToTmp redirect SSRF guard', () => {
+  test('redirect to an internal IP is blocked before a second fetch is made', async () => {
+    // Original host resolves to a public IP — guard passes for the initial URL
+    const dnsModule = await import('node:dns/promises');
+    vi.mocked(dnsModule.lookup).mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
+
+    // First fetch returns a 302 to the AWS metadata endpoint (IP literal → blocked immediately)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+      }),
+    );
+
+    await expect(downloadToTmp('https://feed.example/a.mp3')).rejects.toThrow(/private\/internal/);
+    // The redirect target is an IP literal — assertSafeHttpUrl blocks it before issuing a second fetch
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    vi.restoreAllMocks();
+  });
+
+  test('public-to-public redirect followed by a 200 resolves to {path, cleanup}', async () => {
+    const dnsModule = await import('node:dns/promises');
+    vi.mocked(dnsModule.lookup).mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
+
+    // First call: 302 to a different public CDN host; second call: 200 with a small body
+    const smallBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(8));
+        controller.close();
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://cdn2.example/a.mp3' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(smallBody, { status: 200, headers: { 'content-length': '8' } }),
+      );
+
+    const result = await downloadToTmp('https://cdn.example/a.mp3');
+    expect(result).toHaveProperty('path');
+    expect(result).toHaveProperty('cleanup');
+    expect(typeof result.cleanup).toBe('function');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    await result.cleanup();
+
+    vi.restoreAllMocks();
+  });
+});
