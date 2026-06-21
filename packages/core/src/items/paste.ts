@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
 import { urlHash } from '../util/url';
-import { detectAdhocType } from '../sources';
+import { detectAdhocType, detectAdhocMedia } from '../sources';
 import { getBoss, registerQueues, enqueueStage } from '../queue';
 
 export interface PasteResult {
@@ -26,6 +26,9 @@ export async function pasteUrl(rawUrl: string): Promise<PasteResult> {
     .limit(1);
   if (existing[0]) return { existing: existing[0].id };
 
+  const media = detectAdhocMedia(rawUrl);
+  const contentType = media ? media.contentType : initialContentType(rawUrl);
+
   const inserted = await db
     .insert(items)
     .values({
@@ -34,7 +37,8 @@ export async function pasteUrl(rawUrl: string): Promise<PasteResult> {
       url: rawUrl,
       urlHash: hash,
       title: rawUrl, // URL placeholder; extract overwrites it via resolveTitle once the adapter finds a real title
-      contentType: initialContentType(rawUrl),
+      contentType,
+      mediaUrl: media ? rawUrl : null, // for direct-media the canonical url IS the download source
       rawContent: null,
       state: 'pending',
       currentStage: 'extract',

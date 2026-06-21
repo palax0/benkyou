@@ -1,11 +1,11 @@
-import type { PerItemStage } from './state';
+import type { PerItemStage, StageOutcome } from './state';
 import { extractItem } from './extract';
 import { embedItem } from './embed';
 import { scoreItem } from './score';
 import { dedupItem } from './dedup';
 import { summarizeItem } from './summary';
 
-export const STAGE_HANDLERS: Record<PerItemStage, (itemId: string) => Promise<void>> = {
+export const STAGE_HANDLERS: Record<PerItemStage, (itemId: string) => Promise<void | StageOutcome>> = {
   extract: extractItem,
   embed: embedItem,
   score: scoreItem,

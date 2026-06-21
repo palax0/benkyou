@@ -8,6 +8,7 @@ import {
   getItemState,
   markFailed,
   recordFailure,
+  type StageOutcome,
 } from '../pipeline/state';
 import { ingestSource } from '../pipeline/ingest';
 import { enqueueStage, type IngestJob, type StageJob, type TranscribeJob } from './queues';
@@ -26,12 +27,14 @@ export async function runItemStage(boss: PgBoss, job: StageJob): Promise<void> {
   if (current !== STAGE_REQUIRED_STATE[stage]) return;
 
   await beginStage(itemId, stage); // current_stage = stage, attempts++
+  let outcome: StageOutcome;
   try {
-    await STAGE_HANDLERS[stage](itemId);
+    outcome = (await STAGE_HANDLERS[stage](itemId)) ?? { advance: true };
   } catch (err) {
     await recordFailure(itemId, err); // last_error only; state untouched
     throw err; // pg-boss retries with backoff; after retryLimit → dead-letter
   }
+  if (!outcome.advance) return; // handler handed off; it owns the next advance
   await completeStage(itemId, stage); // state → next, attempts = 0
   const next = NEXT_STAGE[stage];
   if (next) await enqueueStage(boss, next, itemId);
