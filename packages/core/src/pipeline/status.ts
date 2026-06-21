@@ -49,7 +49,7 @@ export async function getQueueHealth(): Promise<QueueHealthRow[]> {
            count(*) FILTER (WHERE state = 'retry')::int   AS retry,
            count(*) FILTER (WHERE state = 'active')::int  AS active
     FROM pgboss.job
-    WHERE name = ANY(ARRAY['extract','embed','score','dedup','summary','ingest'])
+    WHERE name = ANY(ARRAY['extract','embed','score','dedup','summary','ingest','transcribe','transcribe-failed'])
     GROUP BY name ORDER BY name`);
   return r as unknown as QueueHealthRow[];
 }
@@ -65,6 +65,7 @@ export async function getOrphans(): Promise<PipelineItemRow[]> {
     FROM items i
     LEFT JOIN sources s ON s.id = i.source_id
     WHERE i.state NOT IN ('done','failed')
+      AND i.transcript_status <> 'needs_confirmation'
       AND NOT EXISTS (
         SELECT 1 FROM pgboss.job j
         WHERE j.data ->> 'itemId' = i.id::text
@@ -151,6 +152,15 @@ export async function getTokenNoItem(): Promise<number> {
   return r[0]?.total ?? 0;
 }
 
+export async function getTranscriptionMinutes(): Promise<number> {
+  const db = getDbClient();
+  const r = await db
+    .select({ secs: sql<number>`coalesce(sum(${aiUsage.durationSeconds}),0)::int` })
+    .from(aiUsage)
+    .where(and(eq(aiUsage.kind, 'transcription'), gte(aiUsage.createdAt, sql`now() - interval '7 days'`)));
+  return Math.round((r[0]?.secs ?? 0) / 60);
+}
+
 export async function getDimensionDrift(): Promise<DimensionDrift> {
   const db = getDbClient();
   const colRes = await db.execute(sql`
@@ -175,18 +185,21 @@ export interface PipelineStatus {
   failed: FailedItemRow[];
   tokens: { today: StageTokens[]; week: StageTokens[]; topItems: TokenItemRow[]; noItem: number };
   drift: DimensionDrift;
+  transcriptionMinutes: number;
 }
 
 export async function getPipelineStatus(): Promise<PipelineStatus> {
-  const [stateCounts, queueHealth, orphans, inFlight, failed, tokenSummary, topItems, noItem, drift] =
+  const [stateCounts, queueHealth, orphans, inFlight, failed, tokenSummary, topItems, noItem, drift, transcriptionMinutes] =
     await Promise.all([
       getStateCounts(), getQueueHealth(), getOrphans(), getInFlight(50), getFailed(50),
       getTokenSummary(), getTokenTopItems(10), getTokenNoItem(), getDimensionDrift(),
+      getTranscriptionMinutes(),
     ]);
   return {
     stateCounts, queueHealth, orphans, inFlight, failed,
     tokens: { today: tokenSummary.today, week: tokenSummary.week, topItems, noItem },
     drift,
+    transcriptionMinutes,
   };
 }
 

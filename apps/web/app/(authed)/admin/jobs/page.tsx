@@ -159,6 +159,12 @@ export default async function JobsPage() {
           </p>
         )}
       </section>
+
+      {/* 7. Transcription cost (audio minutes only — no money; spec §5.3) */}
+      <section>
+        <h2 className="mb-2 font-semibold">{t('transcriptionMinutes')}</h2>
+        <p className="text-sm">{s.transcriptionMinutes}</p>
+      </section>
     </main>
   );
 }
