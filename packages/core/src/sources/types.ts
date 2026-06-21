@@ -1,3 +1,5 @@
+export type ContentType = 'article' | 'video' | 'discussion' | 'paper' | 'audio';
+
 export interface RawItem {
   externalId: string | null; // feed guid / entry id; used for (source_id, external_id) dedup
   url: string;
@@ -5,6 +7,9 @@ export interface RawItem {
   author: string | null;
   publishedAt: Date | null;
   content: string | null; // best full text the feed itself carried (content:encoded), else null
+  mediaUrl: string | null; // direct audio/video download source (podcast enclosure); null for plain articles
+  contentType: ContentType; // ingest writes this instead of hard-coding 'article'
+  videoDuration: number | null; // seconds; from itunes:duration when present
 }
 
 export type TranscriptStatus =
@@ -56,7 +61,7 @@ export interface ExtractResult {
   title?: string | null;
   contentMd?: string | null; // markdown body for display; dispatcher writes null if absent
   extractStatus?: ExtractStatus; // dispatcher defaults to 'ok' (parallels transcriptStatus)
-  contentType: 'article' | 'video' | 'discussion' | 'paper';
+  contentType: ContentType;
   transcriptStatus?: TranscriptStatus; // video adapters set this; dispatcher defaults to 'na'
   transcriptSegments?: TranscriptSegment[] | null; // timed cues → items.transcript_segments
   videoDuration?: number | null;

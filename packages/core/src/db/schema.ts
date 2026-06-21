@@ -130,6 +130,7 @@ export const items = pgTable(
     author: text('author'),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     contentType: text('content_type').notNull(),
+    mediaUrl: text('media_url'), // download source distinct from canonical url; transcribe pulls media_url ?? url
     rawContent: text('raw_content'),
     contentMd: text('content_md'), // markdown body for display only; NULL → UI falls back to raw_content
     extractStatus: text('extract_status').notNull().default('ok'), // 'ok'|'blocked'|'fetch_failed'|'empty_parse' (article only)

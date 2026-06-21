@@ -57,6 +57,13 @@
       "when": 1781946403137,
       "tag": "0007_next_hairball",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782030555386,
+      "tag": "0008_minor_spyke",
+      "breakpoints": true
     }
   ]
 }
