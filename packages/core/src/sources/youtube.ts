@@ -1,6 +1,7 @@
 import type { ExtractInput, ExtractResult, SourceAdapter, TranscriptSegment } from './types';
 import { TransientFetchError } from './types';
 import { Innertube, Utils } from 'youtubei.js';
+import { withYoutubeSession, isYoutubeTokenExpiryError, YoutubeTokenExpiryError } from './youtube-session';
 
 // Internal contract between the fragile network edge and the pure transform.
 // null  = definitive miss (no captions / video unavailable) → degrade to 'unavailable'.
@@ -119,33 +120,22 @@ export function createYoutubeAdapter(fetchSubtitle: FetchYoutubeSubtitle): Sourc
 // handshake but is required for playability to resolve to OK. (Regression-tested.)
 export const INNERTUBE_OPTIONS = { retrieve_player: true } as const;
 
-let innertube: Promise<Innertube> | null = null;
-function getInnertube(): Promise<Innertube> {
-  // Lazy singleton: Innertube.create() does a network handshake; build it once.
-  innertube ??= Innertube.create(INNERTUBE_OPTIONS);
-  return innertube;
-}
-
-const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
+// One attempt against a given session. Returns a track (possibly empty cues = degrade).
+// Throws TransientFetchError (network/5xx → retry) or YoutubeTokenExpiryError (→ withYoutubeSession
+// refreshes once). A definitive content error degrades in place (empty cues + whatever
+// duration/title we have) so Layer 2 (§4.2) can still fire on the known duration.
+async function fetchOnce(yt: Innertube, videoId: string): Promise<RawSubtitleTrack> {
   let info;
   try {
-    const yt = await getInnertube();
     info = await yt.getInfo(videoId);
   } catch (err) {
-    // A definitive content error (unavailable / private / removed) degrades — retrying
-    // can never recover it and would only burn pipeline_max_attempts → state='failed'.
-    // Only genuine transient failures (network / handshake) retry (design §2 contract).
     if (isDefinitiveYoutubeError(err)) return { durationSeconds: null, title: null, cues: [] };
     throw new TransientFetchError(err instanceof Error ? err.message : String(err));
   }
 
-  // basic_info.duration is number | undefined per youtubei.js v17 MediaInfo types.
   const durationSeconds = info.basic_info.duration ?? null;
   const title = info.basic_info.title ?? null;
 
-  // Private / login-required / region-locked / removed videos often resolve (no throw)
-  // but report a non-OK playability status; there are no captions to fetch → degrade,
-  // keeping the title we did get.
   if (info.playability_status?.status && info.playability_status.status !== 'OK') {
     console.warn(
       `[youtube] ${videoId} degraded: playability=${info.playability_status.status}` +
@@ -158,25 +148,23 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
   try {
     transcript = await info.getTranscript();
   } catch (err) {
-    // No transcript panel = definitively no captions. NB: YouTube's anti-bot hardening
-    // also surfaces here (get_transcript 400 / empty timedtext without a PoToken), so a
-    // captioned video can still land in this branch — log the reason to tell the cases
-    // apart instead of silently reporting "no subtitles".
+    // Anti-bot hardening surfaces here (get_transcript 400 without a valid PoToken).
+    // Signal expiry so withYoutubeSession can refresh once; carry duration/title so an
+    // exhausted refresh still degrades WITH a duration (Layer 2 §4.2). Genuinely
+    // caption-less videos throw a non-expiry error → degrade quietly here.
+    if (isYoutubeTokenExpiryError(err)) {
+      throw new YoutubeTokenExpiryError({ durationSeconds, title, cues: [] });
+    }
     console.warn(
       `[youtube] ${videoId} degraded: getTranscript failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return { durationSeconds, title, cues: [] };
   }
 
-  // Shape (v17): TranscriptInfo.transcript → Transcript (content: TranscriptSearchPanel | null)
-  // → content.body → TranscriptSegmentList (initial_segments: ObservedArray<TranscriptSegment | TranscriptSectionHeader>)
-  // Both segment types share start_ms: string, end_ms: string, snippet: Text.
-  // Text.toString() returns the plain string (handles both .text and runs forms).
   const segments = transcript.transcript.content?.body?.initial_segments ?? [];
   const cues: RawCue[] = segments
     .map((seg) => {
       const text = seg.snippet.toString();
-      // start_ms / end_ms are millisecond strings in youtubei.js v17.
       const start = Number(seg.start_ms) / 1000;
       const end = Number(seg.end_ms) / 1000;
       return { start, end, text };
@@ -184,6 +172,21 @@ const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
     .filter((c) => c.text.trim().length > 0);
 
   return { durationSeconds, title, cues };
+}
+
+const fetchYoutubeSubtitle: FetchYoutubeSubtitle = async (videoId) => {
+  try {
+    return await withYoutubeSession((yt) => fetchOnce(yt, videoId));
+  } catch (err) {
+    if (err instanceof TransientFetchError) throw err; // adapter rethrows → pg-boss retries
+    // Refresh exhausted (or unexpected): degrade, keeping any duration we resolved so
+    // Layer 2 can still hand off on it (§4.2).
+    if (err instanceof YoutubeTokenExpiryError) {
+      console.warn(`[youtube] ${videoId} degraded: PoToken refresh exhausted`);
+      return err.partial;
+    }
+    return { durationSeconds: null, title: null, cues: [] };
+  }
 };
 
 export const youtubeAdapter: SourceAdapter = createYoutubeAdapter(fetchYoutubeSubtitle);
