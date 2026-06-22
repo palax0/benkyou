@@ -8,6 +8,7 @@ import { transcribePolicy } from './transcribe-policy';
 import { probeRemoteDurationSec } from './media-probe';
 import { setTranscriptStatus } from './transcribe-store';
 import { getBoss, enqueueTranscribe } from '../queue';
+import { getBilibiliSessdata } from '../sources/platform-credentials';
 import type { StageOutcome } from './state';
 
 // A media item is transcribe-eligible when it carries a downloadable audio/video source
@@ -117,12 +118,14 @@ export async function extractItem(itemId: string): Promise<StageOutcome | void> 
     : undefined;
 
   const adapter = resolveAdapter({ type, url: item.url });
+  const bilibiliSessdata = (await getBilibiliSessdata()) ?? undefined;
   const result = await adapter.extract({
     url: item.url,
     rawContent: item.rawContent,
     externalId: item.externalId,
     config,
     reader,
+    credentials: { bilibiliSessdata },
   });
 
   await db

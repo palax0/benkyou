@@ -52,6 +52,10 @@ export interface ExtractInput {
   // Reader fallback config, threaded from user_settings by the extract dispatcher.
   // Absent → reader stage disabled (design §5: enabled only when reader_base_url set).
   reader?: { baseUrl: string; apiKey?: string };
+  // Per-platform scrape credentials, threaded from platform_credentials by the extract
+  // dispatcher (design §3). Bilibili: SESSDATA cookie. YouTube manages its own token
+  // cache in youtube-session and needs nothing here.
+  credentials?: { bilibiliSessdata?: string };
 }
 
 export interface ExtractResult {

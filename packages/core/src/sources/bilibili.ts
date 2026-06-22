@@ -21,7 +21,7 @@ export function parseBilibiliId(url: string): string | null {
 
 // Same fetcher contract as YouTube: null = definitive miss; throw TransientFetchError
 // = transient. (login-required captions resolve to null → 'unavailable', design §2.)
-export type FetchBilibiliSubtitle = (bvid: string) => Promise<RawSubtitleTrack | null>;
+export type FetchBilibiliSubtitle = (bvid: string, opts?: { sessdata?: string }) => Promise<RawSubtitleTrack | null>;
 
 function unavailable(durationSeconds: number | null, title?: string | null): ExtractResult {
   return {
@@ -45,7 +45,7 @@ export function createBilibiliAdapter(fetchSubtitle: FetchBilibiliSubtitle): Sou
       if (!bvid) return unavailable(null);
       let track: RawSubtitleTrack | null;
       try {
-        track = await fetchSubtitle(bvid);
+        track = await fetchSubtitle(bvid, { sessdata: input.credentials?.bilibiliSessdata });
       } catch (err) {
         if (err instanceof TransientFetchError) throw err;
         return unavailable(null);
@@ -87,10 +87,12 @@ export function biliStatusDisposition(status: number): 'ok' | 'transient' | 'mis
   return 'ok';
 }
 
-async function biliJson<T>(url: string): Promise<T> {
+async function biliJson<T>(url: string, sessdata?: string): Promise<T> {
+  const headers: Record<string, string> = { ...BILI_HEADERS };
+  if (sessdata) headers.cookie = `SESSDATA=${sessdata}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: BILI_HEADERS });
+    res = await fetch(url, { headers });
   } catch (err) {
     // Network failure is genuinely transient → retry.
     throw new TransientFetchError(`bilibili network: ${err instanceof Error ? err.message : String(err)}`);
@@ -101,9 +103,9 @@ async function biliJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function getMixinKey(): Promise<string> {
+async function getMixinKey(sessdata?: string): Promise<string> {
   const nav = await biliJson<{ data?: { wbi_img?: { img_url?: string; sub_url?: string } } }>(
-    'https://api.bilibili.com/x/web-interface/nav',
+    'https://api.bilibili.com/x/web-interface/nav', sessdata,
   );
   const pick = (u?: string): string => (u ? (u.split('/').pop() ?? '').split('.')[0] ?? '' : '');
   const imgKey = pick(nav.data?.wbi_img?.img_url);
@@ -112,30 +114,35 @@ async function getMixinKey(): Promise<string> {
   return mixinKey(imgKey + subKey);
 }
 
-const fetchBilibiliSubtitle: FetchBilibiliSubtitle = async (bvid) => {
+const fetchBilibiliSubtitle: FetchBilibiliSubtitle = async (bvid, opts) => {
+  const sessdata = opts?.sessdata;
   // 1) bvid → cid + duration + title
   const view = await biliJson<{
     data?: { cid?: number; duration?: number; title?: string };
-  }>(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`);
+  }>(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`, sessdata);
   const cid = view.data?.cid;
   const durationSeconds = view.data?.duration ?? null;
   const title = view.data?.title ?? null;
   if (!cid) return null; // unplayable / removed → definitive miss
 
   // 2) wbi-signed player v2 → subtitle list (login-free subtitles only, design §2)
-  const mk = await getMixinKey();
+  const mk = await getMixinKey(sessdata);
   const signed = encodeWbi({ bvid, cid }, mk, Math.floor(Date.now() / 1000));
   const qs = new URLSearchParams(signed).toString();
   const player = await biliJson<{
     data?: { subtitle?: { subtitles?: Array<{ subtitle_url?: string }> } };
-  }>(`https://api.bilibili.com/x/player/wbi/v2?${qs}`);
+  }>(`https://api.bilibili.com/x/player/wbi/v2?${qs}`, sessdata);
 
   const first = player.data?.subtitle?.subtitles?.[0]?.subtitle_url;
-  if (!first) return { durationSeconds, title, cues: [] }; // no public captions → degrade
+  if (!first) {
+    // Distinguish logged-out from genuinely caption-less (design §5 lightweight reason).
+    console.warn(`[bilibili] ${bvid} no subtitles${sessdata ? '' : ' (anonymous — try SESSDATA)'}`);
+    return { durationSeconds, title, cues: [] };
+  }
   const url = first.startsWith('//') ? `https:${first}` : first;
 
   // 3) subtitle JSON → timed cues
-  const sub = await biliJson<{ body?: Array<{ from?: number; to?: number; content?: string }> }>(url);
+  const sub = await biliJson<{ body?: Array<{ from?: number; to?: number; content?: string }> }>(url, sessdata);
   const cues: RawCue[] = (sub.body ?? [])
     .map((c) => ({ start: c.from ?? 0, end: c.to ?? 0, text: c.content ?? '' }))
     .filter((c) => c.text.trim().length > 0);
