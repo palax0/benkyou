@@ -25,11 +25,17 @@ function useBilibiliQr() {
       const { qrcodeKey, qrDataUrl } = (await res.json()) as { qrcodeKey: string; qrDataUrl: string };
       setState({ phase: 'active', qrDataUrl, status: 'pending' });
       timer.current = setInterval(async () => {
-        const p = await fetch(`/api/credentials/bilibili/qr/poll?key=${encodeURIComponent(qrcodeKey)}`);
-        const { status } = (await p.json()) as { status: 'pending' | 'scanned' | 'success' | 'expired' };
-        if (status === 'success') { stop(); setState({ phase: 'success' }); }
-        else if (status === 'expired') { stop(); setState({ phase: 'expired' }); }
-        else setState((s) => (s.phase === 'active' ? { ...s, status } : s));
+        try {
+          const p = await fetch(`/api/credentials/bilibili/qr/poll?key=${encodeURIComponent(qrcodeKey)}`);
+          if (!p.ok) throw new Error(String(p.status));
+          const { status } = (await p.json()) as { status: 'pending' | 'scanned' | 'success' | 'expired' };
+          if (status === 'success') { stop(); setState({ phase: 'success' }); }
+          else if (status === 'expired') { stop(); setState({ phase: 'expired' }); }
+          else setState((s) => (s.phase === 'active' ? { ...s, status } : s));
+        } catch (e) {
+          stop();
+          setState({ phase: 'error', message: e instanceof Error ? e.message : 'error' });
+        }
       }, 2000);
     } catch (e) {
       stop();
