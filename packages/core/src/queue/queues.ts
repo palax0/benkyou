@@ -7,6 +7,41 @@ import { PER_ITEM_STAGES, type PerItemStage } from '../pipeline';
 export const INGEST_QUEUE = 'ingest';
 export const DEAD_LETTER_QUEUE = 'failed-items';
 
+export const TRANSCRIBE_QUEUE = 'transcribe';
+export const TRANSCRIBE_DEAD_LETTER = 'transcribe-failed';
+export interface TranscribeJob { itemId: string }
+
+export const TRANSCRIBE_TIME_FACTOR = 2;           // download + ffmpeg + concurrent Whisper wall-time
+export const TRANSCRIBE_FIXED_OVERHEAD_SEC = 900;  // connection setup, first-byte latency, ffmpeg spin-up
+
+// Processing wall-time budget — NOT the audio length, and never = video_manual_limit (decision #6).
+export function transcribeBudgetSec(durationSec: number): number {
+  return Math.ceil(durationSec * TRANSCRIBE_TIME_FACTOR) + TRANSCRIBE_FIXED_OVERHEAD_SEC;
+}
+
+// pg-boss 12 validates expireInSeconds / 3600 < 24 (strict less-than), so the usable
+// ceiling is 86399s. Jobs longer than ~11.25h audio will use this ceiling rather than
+// the formula value. The backstop serves the same cap.
+const PG_BOSS_MAX_EXPIRE_SEC = 86_399;
+
+// Queue-wide wall-time backstop: catches any job that escaped per-send expiry or where
+// the per-send override was not honored (e.g. a redelivery that lost its original TTL).
+// Flat 86399 rather than transcribeBudgetSec(maxDuration) because pg-boss hard-rejects
+// expireInSeconds >= 24h (validates value / 3600 < 24); the formula can exceed that for
+// very long audio, so we use the highest safe constant instead.
+export const TRANSCRIBE_EXPIRY_BACKSTOP_SEC = PG_BOSS_MAX_EXPIRE_SEC;
+
+export async function enqueueTranscribe(
+  boss: PgBoss, itemId: string, opts: { durationSec: number },
+): Promise<void> {
+  // singletonKey makes a redelivered extract's re-enqueue a no-op while a transcribe
+  // job for this item is still live — an expensive stage must not double-bill Whisper.
+  await boss.send(TRANSCRIBE_QUEUE, { itemId } satisfies TranscribeJob, {
+    expireInSeconds: Math.min(transcribeBudgetSec(opts.durationSec), PG_BOSS_MAX_EXPIRE_SEC),
+    singletonKey: itemId,
+  });
+}
+
 export interface StageJob {
   itemId: string;
   stage: PerItemStage;
@@ -32,6 +67,16 @@ export async function registerQueues(boss: PgBoss): Promise<void> {
     await boss.createQueue(stage, policy);
     await boss.updateQueue(stage, policy);
   }
+  // transcribe is NOT a PER_ITEM_STAGES member — its retryLimit=2 is hardcoded and
+  // independent of user_settings.pipeline_max_attempts. The loop above must not touch it.
+  await boss.createQueue(TRANSCRIBE_DEAD_LETTER);
+  const transcribePolicy = {
+    retryLimit: 2, retryBackoff: true,
+    deadLetter: TRANSCRIBE_DEAD_LETTER,
+    expireInSeconds: TRANSCRIBE_EXPIRY_BACKSTOP_SEC,
+  };
+  await boss.createQueue(TRANSCRIBE_QUEUE, transcribePolicy);
+  await boss.updateQueue(TRANSCRIBE_QUEUE, transcribePolicy);
 }
 
 export async function enqueueIngest(boss: PgBoss, sourceId: string): Promise<void> {

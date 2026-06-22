@@ -89,5 +89,13 @@ export function aiReadiness(s: ProviderFields): AiReadiness {
   return isAiConfigured(s) ? 'aiConfigured' : 'bootstrapped';
 }
 
+export interface WhisperConfig { baseUrl: string; apiKey?: string; model: string; }
+export function buildWhisperConfig(s: UserSettings): WhisperConfig {
+  if (!s.whisperBaseUrl || !s.whisperModel) {
+    throw new Error('Whisper not configured (whisper_base_url / whisper_model missing in user_settings)');
+  }
+  return { baseUrl: s.whisperBaseUrl, apiKey: s.whisperApiKey ?? undefined, model: s.whisperModel };
+}
+
 export { RANKING_PRESETS, matchPreset } from './ranking-presets';
 export type { RankingPreset, Weights } from './ranking-presets';

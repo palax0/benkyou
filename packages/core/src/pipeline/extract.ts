@@ -3,6 +3,61 @@ import { getDbClient, items, sources } from '../db';
 import { resolveAdapter } from '../sources';
 import { getUserSettings } from '../settings';
 import type { ExtractResult } from '../sources/types';
+import { env } from '../config/env';
+import { transcribePolicy } from './transcribe-policy';
+import { probeRemoteDurationSec } from './media-probe';
+import { setTranscriptStatus } from './transcribe-store';
+import { getBoss, enqueueTranscribe } from '../queue';
+import type { StageOutcome } from './state';
+
+// A media item is transcribe-eligible when it carries a downloadable audio/video source
+// and has no usable transcript yet. The article adapter would mangle a raw media URL, so
+// these items SKIP the adapter entirely (clarifies the spec's "after the adapter returns":
+// podcasts keep their ingest-time show-notes raw_content, paste has none).
+function isTranscribeEligible(item: { contentType: string; mediaUrl: string | null; transcriptStatus: string }): boolean {
+  return (item.contentType === 'audio' || item.contentType === 'video')
+    && item.mediaUrl != null
+    && item.transcriptStatus !== 'present';
+}
+
+async function runMediaHandoff(item: {
+  id: string; url: string; mediaUrl: string | null; videoDuration: number | null; sourceId: string | null;
+}): Promise<StageOutcome> {
+  const settings = await getUserSettings();
+  const source = item.mediaUrl ?? item.url;
+
+  let durationSec = item.videoDuration;
+  if (durationSec == null) {
+    const probed = await probeRemoteDurationSec(source); // throws transient → extract retry consumes attempts
+    if (probed == null) {                                // resolved but not media → degrade + continue
+      await setTranscriptStatus(item.id, 'unavailable');
+      return { advance: true };
+    }
+    durationSec = probed;
+    await getDbClient().update(items).set({ videoDuration: durationSec }).where(eq(items.id, item.id));
+  }
+
+  const decision = transcribePolicy({
+    durationSec, isAdhoc: item.sourceId == null,
+    deployMode: env.DEPLOY_MODE === 'serverless' ? 'serverless' : 'docker',
+    autoLimit: settings?.videoAutoLimit ?? 1800,
+    manualLimit: settings?.videoManualLimit ?? 10800,
+  });
+
+  if (decision.kind === 'skip') {
+    await setTranscriptStatus(item.id, decision.status);
+    return { advance: true }; // continue on title/metadata
+  }
+  if (decision.kind === 'confirm') {
+    await setTranscriptStatus(item.id, 'needs_confirmation'); // parks; not stuck (orphan check excludes it)
+    return { advance: false };
+  }
+  // transcribe
+  await setTranscriptStatus(item.id, 'pending');
+  const boss = await getBoss();
+  await enqueueTranscribe(boss, item.id, { durationSec });
+  return { advance: false }; // transcribe owns the next advance
+}
 
 // A paste item starts with title = its URL (placeholder). extract refines it from the
 // adapter's discovered title, but ONLY over that placeholder — a real feed title (RSS)
@@ -33,11 +88,15 @@ export function extractColumns(
   };
 }
 
-export async function extractItem(itemId: string): Promise<void> {
+export async function extractItem(itemId: string): Promise<StageOutcome | void> {
   const db = getDbClient();
   const rows = await db.select().from(items).where(eq(items.id, itemId)).limit(1);
   const item = rows[0];
   if (!item) throw new Error(`Item not found: ${itemId}`);
+
+  if (isTranscribeEligible(item)) {
+    return runMediaHandoff(item);
+  }
 
   let type: string | null = null;
   let config: Record<string, unknown> | undefined;

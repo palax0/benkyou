@@ -8,9 +8,12 @@ import {
   getItemState,
   markFailed,
   recordFailure,
+  type StageOutcome,
 } from '../pipeline/state';
 import { ingestSource } from '../pipeline/ingest';
-import { enqueueStage, type IngestJob, type StageJob } from './queues';
+import { enqueueStage, type IngestJob, type StageJob, type TranscribeJob } from './queues';
+import { getTranscribeView, writeTranscriptAndAdvance, degradeTranscriptAndAdvance } from '../pipeline/transcribe-store';
+import { transcribeItem } from '../pipeline/transcribe';
 
 export async function runItemStage(boss: PgBoss, job: StageJob): Promise<void> {
   const { itemId, stage } = job;
@@ -24,12 +27,14 @@ export async function runItemStage(boss: PgBoss, job: StageJob): Promise<void> {
   if (current !== STAGE_REQUIRED_STATE[stage]) return;
 
   await beginStage(itemId, stage); // current_stage = stage, attempts++
+  let outcome: StageOutcome;
   try {
-    await STAGE_HANDLERS[stage](itemId);
+    outcome = (await STAGE_HANDLERS[stage](itemId)) ?? { advance: true };
   } catch (err) {
     await recordFailure(itemId, err); // last_error only; state untouched
     throw err; // pg-boss retries with backoff; after retryLimit → dead-letter
   }
+  if (!outcome.advance) return; // handler handed off; it owns the next advance
   await completeStage(itemId, stage); // state → next, attempts = 0
   const next = NEXT_STAGE[stage];
   if (next) await enqueueStage(boss, next, itemId);
@@ -44,4 +49,25 @@ export async function runIngest(boss: PgBoss, job: IngestJob): Promise<number> {
 // Dead-letter handler = the spec's "onFail" callback: terminal failure.
 export async function handleDeadLetter(job: StageJob): Promise<void> {
   await markFailed(job.itemId, job.stage);
+}
+
+export async function runTranscribe(boss: PgBoss, { itemId }: TranscribeJob): Promise<void> {
+  const item = await getTranscribeView(itemId);
+  // Own at-least-once guard: drop a redelivered/out-of-order job.
+  if (item?.state !== 'pending' || item.transcriptStatus !== 'pending') return;
+  try {
+    const { segments, flatText, durationSec } = await transcribeItem(item);
+    // Atomic write+advance; enqueue embed only after it committed the state move.
+    const advanced = await writeTranscriptAndAdvance(itemId, { segments, flatText, durationSec });
+    if (advanced) await enqueueStage(boss, 'embed', itemId);
+  } catch (err) {
+    await recordFailure(itemId, err); // last_error only; state untouched
+    throw err;                        // retryLimit=2 → TRANSCRIBE_DEAD_LETTER
+  }
+}
+
+// Terminal: degrade + CONTINUE (never markFailed — that handler sets state='failed').
+export async function handleTranscribeDeadLetter(boss: PgBoss, { itemId }: TranscribeJob): Promise<void> {
+  const advanced = await degradeTranscriptAndAdvance(itemId);
+  if (advanced) await enqueueStage(boss, 'embed', itemId);
 }

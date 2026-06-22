@@ -33,4 +33,13 @@ describe('mapStep', () => {
     // sub-status only on the extract step, not later steps
     expect(mapStep('embedded', 'score', 'pending', null).transcriptSub).toBeNull();
   });
+
+  test('needs_confirmation surfaces as the extract sub-step (not folded away)', () => {
+    const v = mapStep('pending', 'extract', 'needs_confirmation', null);
+    expect(v).toEqual({ activeIndex: 1, failed: false, transcriptSub: 'needs_confirmation' });
+  });
+  test('pending transcript surfaces as transcribing sub-step', () => {
+    const v = mapStep('pending', 'extract', 'pending', null);
+    expect(v.transcriptSub).toBe('pending');
+  });
 });

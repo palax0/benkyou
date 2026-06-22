@@ -7,6 +7,7 @@ import { TranscriptBadge } from '@/components/TranscriptBadge';
 import { ArticleBody } from '@/components/ArticleBody';
 import { ExtractNotice, SummaryBasisBadge } from '@/components/ExtractNotice';
 import { PipelineStepper } from '@/components/PipelineStepper';
+import { ConfirmTranscribe } from '@/components/ConfirmTranscribe';
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +29,12 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
         </header>
         <p className="text-sm text-muted">{progress.title}</p>
         <PipelineStepper view={view} lastError={progress.lastError} itemId={progress.id} />
+        {progress.transcriptStatus === 'needs_confirmation' ? (
+          <ConfirmTranscribe
+            itemId={progress.id}
+            estimatedMinutes={Math.round((progress.durationSec ?? 0) / 60)}
+          />
+        ) : null}
       </main>
     );
   }
@@ -52,9 +59,15 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             {t('original')}
           </a>
         </div>
-        {item.contentType === 'video' ? (
+        {item.contentType === 'video' || item.contentType === 'audio' ? (
           <div className="mt-2">
             <TranscriptBadge status={item.transcriptStatus} />
+          </div>
+        ) : null}
+        {/* DESIGN-GAP: audio player shell — structurally-neutral; impeccable polishes later */}
+        {item.contentType === 'audio' ? (
+          <div className="mt-2">
+            <audio controls src={item.mediaUrl ?? item.url} />
           </div>
         ) : null}
         <div className="mt-2">

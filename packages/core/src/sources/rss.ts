@@ -16,10 +16,21 @@ interface FeedItem {
   pubDate?: string;
   content?: string;
   contentEncoded?: string;
+  enclosure?: { url?: string; type?: string };
+  itunesDuration?: string;
 }
 
 function isRssConfig(c: Record<string, unknown>): c is RssConfig {
   return typeof c.url === 'string' && c.url.length > 0;
+}
+
+// hh:mm:ss | mm:ss | ss → seconds; null on garbage
+export function parseItunesDuration(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const parts = raw.trim().split(':').map((p) => Number(p));
+  if (parts.some((n) => !Number.isFinite(n))) return null;
+  const secs = parts.reduce((acc, n) => acc * 60 + n, 0);
+  return Number.isFinite(secs) && secs > 0 ? Math.round(secs) : null;
 }
 
 export const rssAdapter: SourceAdapter = {
@@ -37,14 +48,18 @@ export const rssAdapter: SourceAdapter = {
     const xml = await res.text();
 
     // `content:encoded` is not a default rss-parser field; map it explicitly.
+    // `itunes:duration` is likewise non-default; rss-parser surfaces `enclosure` natively.
     const parser: Parser<unknown, FeedItem> = new Parser({
-      customFields: { item: [['content:encoded', 'contentEncoded']] },
+      customFields: { item: [['content:encoded', 'contentEncoded'], ['itunes:duration', 'itunesDuration']] },
     });
     const feed = await parser.parseString(xml);
 
     return (feed.items ?? [])
       .map((it): RawItem => {
         const when = it.isoDate ?? it.pubDate ?? null;
+        const enclosureUrl =
+          it.enclosure?.type?.startsWith('audio/') || it.enclosure?.type?.startsWith('video/')
+            ? (it.enclosure.url ?? null) : null;
         return {
           externalId: it.guid ?? it.link ?? null,
           url: it.link ?? '',
@@ -52,6 +67,9 @@ export const rssAdapter: SourceAdapter = {
           author: it.creator ?? it.author ?? null,
           publishedAt: when ? new Date(when) : null,
           content: it.contentEncoded ?? it.content ?? null,
+          mediaUrl: enclosureUrl,
+          contentType: enclosureUrl ? 'audio' : 'article',
+          videoDuration: parseItunesDuration(it.itunesDuration),
         };
       })
       .filter((r) => r.url.length > 0);

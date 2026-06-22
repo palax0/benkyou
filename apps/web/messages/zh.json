@@ -106,8 +106,13 @@
       "present": "字幕",
       "unavailable": "无字幕",
       "pending": "转写中",
-      "na": ""
-    }
+      "na": "",
+      "needs_confirmation": "待确认转写",
+      "skipped_too_long": "超时长未转写",
+      "skipped_serverless": "无服务端转写"
+    },
+    "confirmTranscribe": "确认转写({minutes} 分钟)",
+    "confirming": "提交中…"
   },
   "search": {
     "title": "搜索",
@@ -220,7 +225,8 @@
     "noItemTokens": "无 item 关联：{n}",
     "drift": "维度漂移",
     "driftOk": "✓ 维度一致（{dim}）",
-    "driftWarn": "⚠ 维度不一致：env={env} / 列={col} / 设置={set}。列维度为准（迁移时冻结），embed 阶段会失败直到模型输出维度等于列维度。"
+    "driftWarn": "⚠ 维度不一致：env={env} / 列={col} / 设置={set}。列维度为准（迁移时冻结），embed 阶段会失败直到模型输出维度等于列维度。",
+    "transcriptionMinutes": "转写时长（分钟，近 7 日）"
   },
   "banner": {
     "failingSources": "{n} 个订阅源连续抓取失败",

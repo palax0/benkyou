@@ -3,12 +3,15 @@ import { PER_ITEM_STAGES } from '../pipeline';
 import {
   DEAD_LETTER_QUEUE,
   INGEST_QUEUE,
+  TRANSCRIBE_DEAD_LETTER,
+  TRANSCRIBE_QUEUE,
   checkDueSources,
   registerQueues,
   type IngestJob,
   type StageJob,
+  type TranscribeJob,
 } from './queues';
-import { handleDeadLetter, runIngest, runItemStage } from './runner';
+import { handleDeadLetter, handleTranscribeDeadLetter, runIngest, runItemStage, runTranscribe } from './runner';
 
 const DUE_SOURCE_POLL_MS = 60_000;
 
@@ -28,6 +31,12 @@ export async function runWorkerLoop(): Promise<void> {
   }
   await boss.work<StageJob>(DEAD_LETTER_QUEUE, async ([job]) => {
     if (job) await handleDeadLetter(job.data);
+  });
+  await boss.work<TranscribeJob>(TRANSCRIBE_QUEUE, async ([job]) => {
+    if (job) await runTranscribe(boss, job.data);
+  });
+  await boss.work<TranscribeJob>(TRANSCRIBE_DEAD_LETTER, async ([job]) => {
+    if (job) await handleTranscribeDeadLetter(boss, job.data);
   });
 
   await checkDueSources(boss);

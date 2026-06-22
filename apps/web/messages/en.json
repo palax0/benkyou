@@ -106,8 +106,13 @@
       "present": "Subtitles",
       "unavailable": "No subtitles",
       "pending": "Transcribing",
-      "na": ""
-    }
+      "na": "",
+      "needs_confirmation": "Awaiting confirmation",
+      "skipped_too_long": "Too long — skipped",
+      "skipped_serverless": "Transcription off (serverless)"
+    },
+    "confirmTranscribe": "Transcribe (~{minutes} min)",
+    "confirming": "Submitting…"
   },
   "search": {
     "title": "Search",
@@ -220,7 +225,8 @@
     "noItemTokens": "No item attached: {n}",
     "drift": "Dimension drift",
     "driftOk": "✓ Dimensions consistent ({dim})",
-    "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim."
+    "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim.",
+    "transcriptionMinutes": "Transcription minutes (last 7 days)"
   },
   "banner": {
     "failingSources": "{n} source(s) failing to fetch",

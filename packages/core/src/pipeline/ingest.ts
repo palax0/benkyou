@@ -52,7 +52,9 @@ export async function ingestSource(sourceId: string): Promise<IngestResult> {
         title: r.title,
         author: r.author,
         publishedAt: r.publishedAt,
-        contentType: 'article',
+        contentType: r.contentType ?? 'article',
+        mediaUrl: r.mediaUrl,
+        videoDuration: r.videoDuration,
         rawContent: r.content, // may be null → extract will fetch + Readability
         state: 'pending',
         currentStage: 'extract',

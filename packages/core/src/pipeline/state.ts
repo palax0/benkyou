@@ -1,6 +1,9 @@
 import { eq, sql } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
 
+// Handlers may hand off without advancing (e.g. extract enqueuing transcribe). Default = advance.
+export type StageOutcome = { advance: boolean };
+
 export const STATES = [
   'pending',
   'extracted',

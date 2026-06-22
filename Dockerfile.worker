@@ -17,6 +17,7 @@ RUN pnpm build
 FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+RUN apk add --no-cache ffmpeg
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY --from=build /app/apps/worker/package.json ./apps/worker/
 COPY --from=build /app/packages/core ./packages/core

@@ -1,14 +1,16 @@
 import { getBoss } from './boss';
-import { PER_ITEM_STAGES } from '../pipeline';
 import {
   DEAD_LETTER_QUEUE,
   INGEST_QUEUE,
+  TRANSCRIBE_DEAD_LETTER,
+  TRANSCRIBE_QUEUE,
   checkDueSources,
   registerQueues,
   type IngestJob,
   type StageJob,
+  type TranscribeJob,
 } from './queues';
-import { handleDeadLetter, runIngest, runItemStage } from './runner';
+import { handleDeadLetter, handleTranscribeDeadLetter, runIngest, runItemStage, runTranscribe } from './runner';
 
 export interface BatchResult {
   processed: number;
@@ -23,7 +25,10 @@ export async function processBatch(maxJobs: number): Promise<BatchResult> {
   await registerQueues(boss);
   await checkDueSources(boss);
 
-  const queues = [INGEST_QUEUE, ...PER_ITEM_STAGES, DEAD_LETTER_QUEUE] as const;
+  const queues = [
+    INGEST_QUEUE, 'extract', TRANSCRIBE_QUEUE, TRANSCRIBE_DEAD_LETTER,
+    'embed', 'score', 'dedup', 'summary', DEAD_LETTER_QUEUE,
+  ] as const;
   let processed = 0;
   let errors = 0;
 
@@ -36,6 +41,8 @@ export async function processBatch(maxJobs: number): Promise<BatchResult> {
         try {
           if (queue === INGEST_QUEUE) await runIngest(boss, job.data as IngestJob);
           else if (queue === DEAD_LETTER_QUEUE) await handleDeadLetter(job.data as StageJob);
+          else if (queue === TRANSCRIBE_QUEUE) await runTranscribe(boss, job.data as TranscribeJob);
+          else if (queue === TRANSCRIBE_DEAD_LETTER) await handleTranscribeDeadLetter(boss, job.data as TranscribeJob);
           else await runItemStage(boss, job.data as StageJob);
           await boss.complete(queue, job.id);
         } catch (err) {
