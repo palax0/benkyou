@@ -236,7 +236,11 @@
     "drift": "维度漂移",
     "driftOk": "✓ 维度一致（{dim}）",
     "driftWarn": "⚠ 维度不一致：env={env} / 列={col} / 设置={set}。列维度为准（迁移时冻结），embed 阶段会失败直到模型输出维度等于列维度。",
-    "transcriptionMinutes": "转写时长（分钟，近 7 日）"
+    "transcriptionMinutes": "转写时长（分钟，近 7 日）",
+    "potokenHealth": "PoToken sidecar",
+    "potokenOff": "未配置（YouTube 凭据能力已关闭）",
+    "potokenUp": "可访问",
+    "potokenDown": "不可访问 — sidecar 恢复前 YouTube 条目将降级"
   },
   "banner": {
     "failingSources": "{n} 个订阅源连续抓取失败",

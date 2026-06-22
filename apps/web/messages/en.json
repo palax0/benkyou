@@ -236,7 +236,11 @@
     "drift": "Dimension drift",
     "driftOk": "✓ Dimensions consistent ({dim})",
     "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim.",
-    "transcriptionMinutes": "Transcription minutes (last 7 days)"
+    "transcriptionMinutes": "Transcription minutes (last 7 days)",
+    "potokenHealth": "PoToken sidecar",
+    "potokenOff": "Not configured (YouTube credential capability off)",
+    "potokenUp": "Reachable",
+    "potokenDown": "Unreachable — YouTube items will degrade until the sidecar recovers"
   },
   "banner": {
     "failingSources": "{n} source(s) failing to fetch",
