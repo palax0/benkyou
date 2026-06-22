@@ -75,7 +75,17 @@
     "readerSection": "Reader 端点（兜底）",
     "readerBaseUrlPlaceholder": "Reader 基址（如 https://r.jina.ai），留空则不启用",
     "readerApiKeyPlaceholder": "Reader API Key（可选）",
-    "readerApiKeyConfigured": "已保存 Reader API Key — 留空则保持不变"
+    "readerApiKeyConfigured": "已保存 Reader API Key — 留空则保持不变",
+    "credentialsSection": "抓取凭据"
+  },
+  "credentials": {
+    "youtubeLabel": "YouTube PoToken",
+    "youtube": { "auto": "自动(sidecar)", "off": "未启用(未配置 provider)" },
+    "bilibiliLabel": "Bilibili SESSDATA",
+    "bilibili": { "valid": "有效", "expired": "已过期 — 请重新扫码", "unset": "未设置" },
+    "scanButton": "扫码登录",
+    "qrAlt": "Bilibili 登录二维码",
+    "qr": { "pending": "等待扫码…", "scanned": "已扫码 — 请在 App 中确认", "success": "已登录", "expired": "二维码已过期 — 请重试", "error": "失败:{message}" }
   },
   "paste": {
     "placeholder": "粘贴文章或视频链接…",

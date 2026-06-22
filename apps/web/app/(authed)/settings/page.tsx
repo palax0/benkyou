@@ -1,9 +1,11 @@
 import { getTranslations } from 'next-intl/server';
 import { getUserSettings } from '@benkyou/core/settings';
+import { getCredentialStatus } from '@benkyou/core/sources';
 import { AiServicesSection } from './sections/AiServicesSection';
 import { RankingSection } from './sections/RankingSection';
 import { InterestsSection } from './sections/InterestsSection';
 import { AppearanceSection } from './sections/AppearanceSection';
+import { CredentialsSection } from './sections/CredentialsSection';
 import { PasswordForm } from './PasswordForm';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -19,6 +21,7 @@ export default async function SettingsPage() {
   const t = await getTranslations('settings');
   const settings = await getUserSettings();
   if (!settings) return null; // authed layout guarantees initialized; defensive
+  const credentialStatus = await getCredentialStatus();
   const { llmApiKey, embedApiKey, readerApiKey, ...safeSettings } = settings;
   const weights = {
     alpha: Number(settings.weightAlpha ?? '0.6'),
@@ -48,6 +51,9 @@ export default async function SettingsPage() {
       </Section>
       <Section title={t('appearanceSection')}>
         <AppearanceSection locale={settings.locale as 'zh' | 'en'} />
+      </Section>
+      <Section title={t('credentialsSection')}>
+        <CredentialsSection status={credentialStatus} />
       </Section>
       <Section title={t('accountSection')}>
         <PasswordForm />

@@ -12,3 +12,5 @@ export { generateBilibiliQr, pollBilibiliQr } from './bilibili-qr';
 export type { QrGenerate, QrPollStatus, QrPollResult } from './bilibili-qr';
 export { getPlatformCredential, getBilibiliSessdata } from './platform-credentials';
 export type { Platform, PlatformCredentialRow } from './platform-credentials';
+export { getCredentialStatus, deriveBilibiliStatus } from './credential-status';
+export type { CredentialStatus } from './credential-status';
