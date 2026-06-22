@@ -105,6 +105,16 @@ test('streaming download aborts when the body exceeds the ceiling despite a smal
   await expect(downloadToTmp('https://cdn/a.mp3', 1024)).rejects.toThrow(/byte ceiling/);
 });
 
+describe('SSRF guard allows public googlevideo addresses (§4.4)', () => {
+  test('a public IPv4 (googlevideo edge) is not blocked', () => {
+    expect(isBlockedAddress('142.250.72.206')).toBe(false); // public Google range
+  });
+  test('private ranges still blocked (regression)', () => {
+    expect(isBlockedAddress('10.0.0.5')).toBe(true);
+    expect(isBlockedAddress('169.254.169.254')).toBe(true); // cloud metadata
+  });
+});
+
 describe('downloadToTmp redirect SSRF guard', () => {
   test('redirect to an internal IP is blocked before a second fetch is made', async () => {
     // Original host resolves to a public IP — guard passes for the initial URL
