@@ -1,6 +1,6 @@
 import type { ExtractInput, ExtractResult, SourceAdapter, TranscriptSegment } from './types';
 import { TransientFetchError } from './types';
-import { Innertube, Utils } from 'youtubei.js';
+import { type Innertube, Utils } from 'youtubei.js';
 import { withYoutubeSession, isYoutubeTokenExpiryError, YoutubeTokenExpiryError } from './youtube-session';
 
 // Internal contract between the fragile network edge and the pure transform.
