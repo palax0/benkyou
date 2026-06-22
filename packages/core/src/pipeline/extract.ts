@@ -9,6 +9,8 @@ import { probeRemoteDurationSec } from './media-probe';
 import { setTranscriptStatus } from './transcribe-store';
 import { getBoss, enqueueTranscribe } from '../queue';
 import { getBilibiliSessdata } from '../sources/platform-credentials';
+import { parseYoutubeVideoId } from '../sources/youtube';
+import { isPotokenEnabled } from '../sources/youtube-session';
 import type { StageOutcome } from './state';
 
 // A media item is transcribe-eligible when it carries a downloadable audio/video source
@@ -21,12 +23,37 @@ function isTranscribeEligible(item: { contentType: string; mediaUrl: string | nu
     && item.transcriptStatus !== 'present';
 }
 
+// Decision tail shared by the pre-adapter media handoff (duration probed) and the
+// post-adapter YouTube→Whisper handoff (duration already known from getInfo, §4.2).
+export async function applyTranscribePolicy(
+  item: { id: string; sourceId: string | null },
+  durationSec: number,
+): Promise<StageOutcome> {
+  const settings = await getUserSettings();
+  const decision = transcribePolicy({
+    durationSec, isAdhoc: item.sourceId == null,
+    deployMode: env.DEPLOY_MODE === 'serverless' ? 'serverless' : 'docker',
+    autoLimit: settings?.videoAutoLimit ?? 1800,
+    manualLimit: settings?.videoManualLimit ?? 10800,
+  });
+  if (decision.kind === 'skip') {
+    await setTranscriptStatus(item.id, decision.status);
+    return { advance: true };
+  }
+  if (decision.kind === 'confirm') {
+    await setTranscriptStatus(item.id, 'needs_confirmation'); // parks; orphan check excludes it
+    return { advance: false };
+  }
+  await setTranscriptStatus(item.id, 'pending');
+  const boss = await getBoss();
+  await enqueueTranscribe(boss, item.id, { durationSec });
+  return { advance: false }; // transcribe owns the next advance
+}
+
 async function runMediaHandoff(item: {
   id: string; url: string; mediaUrl: string | null; videoDuration: number | null; sourceId: string | null;
 }): Promise<StageOutcome> {
-  const settings = await getUserSettings();
   const source = item.mediaUrl ?? item.url;
-
   let durationSec = item.videoDuration;
   if (durationSec == null) {
     const probed = await probeRemoteDurationSec(source); // throws transient → extract retry consumes attempts
@@ -37,27 +64,21 @@ async function runMediaHandoff(item: {
     durationSec = probed;
     await getDbClient().update(items).set({ videoDuration: durationSec }).where(eq(items.id, item.id));
   }
+  return applyTranscribePolicy(item, durationSec);
+}
 
-  const decision = transcribePolicy({
-    durationSec, isAdhoc: item.sourceId == null,
-    deployMode: env.DEPLOY_MODE === 'serverless' ? 'serverless' : 'docker',
-    autoLimit: settings?.videoAutoLimit ?? 1800,
-    manualLimit: settings?.videoManualLimit ?? 10800,
-  });
-
-  if (decision.kind === 'skip') {
-    await setTranscriptStatus(item.id, decision.status);
-    return { advance: true }; // continue on title/metadata
-  }
-  if (decision.kind === 'confirm') {
-    await setTranscriptStatus(item.id, 'needs_confirmation'); // parks; not stuck (orphan check excludes it)
-    return { advance: false };
-  }
-  // transcribe
-  await setTranscriptStatus(item.id, 'pending');
-  const boss = await getBoss();
-  await enqueueTranscribe(boss, item.id, { durationSec });
-  return { advance: false }; // transcribe owns the next advance
+// Post-adapter Layer-2 seam (§4.2). The video_duration != null guard is LOAD-BEARING:
+// it keeps a no-duration result degrading to 'unavailable' (never ffprobing the watch
+// page HTML). Bilibili is excluded — parseYoutubeVideoId returns null for it.
+export function isYoutubeWhisperHandoff(
+  item: { contentType: string; transcriptStatus: string; url: string; videoDuration: number | null },
+  potokenEnabled: boolean,
+): boolean {
+  return item.contentType === 'video'
+    && item.transcriptStatus === 'unavailable'
+    && potokenEnabled
+    && item.videoDuration != null
+    && parseYoutubeVideoId(item.url) != null;
 }
 
 // A paste item starts with title = its URL (placeholder). extract refines it from the
@@ -132,4 +153,17 @@ export async function extractItem(itemId: string): Promise<StageOutcome | void> 
     .update(items)
     .set(extractColumns(result, { videoKind: item.videoKind, title: item.title, url: item.url }))
     .where(eq(items.id, itemId));
+
+  if (isYoutubeWhisperHandoff(
+    {
+      contentType: result.contentType,
+      transcriptStatus: result.transcriptStatus ?? 'na',
+      url: item.url,
+      videoDuration: result.videoDuration ?? null,
+    },
+    isPotokenEnabled(),
+  )) {
+    // Overwrite the just-written 'unavailable' with pending/needs_confirmation/skipped_*.
+    return applyTranscribePolicy({ id: itemId, sourceId: item.sourceId }, result.videoDuration!);
+  }
 }
