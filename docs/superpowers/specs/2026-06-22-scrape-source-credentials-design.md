@@ -104,8 +104,8 @@ The Innertube session must be built **with** the PoToken — today `youtube.ts` 
 
 Wiring:
 
-1. **Relax eligibility** (`extract.ts:isTranscribeEligible`): from `media_url != null` to `contentType∈{audio,video}` && `transcriptStatus≠present` && (`media_url != null` **OR** is-YouTube-URL && PoToken capability on).
-2. YouTube no-caption (adapter returns unavailable) **with** `video_duration` (already provided by getInfo) → enters `runMediaHandoff` → `transcribePolicy` decides skip/confirm/transcribe by duration — **zero policy change**, reused as-is.
+1. **`isTranscribeEligible` stays unchanged — it is the *pre-adapter* gate and must keep matching `media_url`-bearing items only** (`contentType∈{audio,video}` && `media_url != null` && `transcriptStatus≠present`). It deliberately short-circuits the adapter (`extract.ts:97`, "SKIP the adapter entirely"). **Do not widen it to YouTube:** a pasted YouTube URL already carries `contentType='video'` (`paste.ts:initialContentType`), so a widened predicate would fire *before* the adapter runs — caption fetch is skipped (defeating §0's "cheap captions first, Whisper as the narrow fallback") **and** `runMediaHandoff` would see `video_duration=null` and `ffprobe` the watch-page HTML → fail. The Layer-2 seam is therefore *post*-adapter, not a tweak to this gate.
+2. **New *post-adapter* handoff branch in `extractItem`** (the actual Layer-2 seam): after `adapter.extract()` returns and its columns are written, if `contentType='video'` && `transcriptStatus='unavailable'` && the item is a YouTube URL && PoToken capability on && `video_duration != null` → hand off to `transcribePolicy` (skip/confirm/transcribe by duration). The adapter's `getInfo` already populated `video_duration` — it resolves even for anti-bot-blocked videos (§0: `playability=OK, duration=1951`) — so the handoff runs on the **known** duration. The `video_duration != null` guard is load-bearing: a no-duration result keeps degrading to `unavailable` and never enters the handoff, which is what prevents the watch-URL `ffprobe` footgun. `transcribePolicy` itself is **unchanged**; reuse `runMediaHandoff` only with the duration pre-resolved (skip its internal `probeRemoteDurationSec`), or call `transcribePolicy` + `enqueueTranscribe` directly. `extractItem` now returns this branch's `StageOutcome` (was `void`), overwriting the just-written `unavailable` with `pending`/`needs_confirmation`/`skipped_*`.
 3. **Download-stage resolver:** if the item is YouTube, call `youtube-session` to resolve a fresh audio-only stream URL (decipher) → existing guarded streaming download → chunked Whisper → `transcript_segments` (same contract).
 4. **SSRF guard caveat:** recent commits added redirect-hop SSRF re-validation + private-IP blocking to media download. googlevideo is a public host (fine), but Range requests + its redirects must not be killed by the new guards — **implementation must verify** this.
 
@@ -136,10 +136,10 @@ Observability (reuse existing M1c/M2a panels, no new system):
 
 Follows existing conventions (Testcontainers for DB integration, MSW for HTTP mocking, live tests off by default).
 
-- **Pure-function TDD:** credential resolution, the relaxed `isTranscribeEligible`, token-expiry detection.
+- **Pure-function TDD:** credential resolution, the post-adapter YouTube→Whisper handoff predicate (`§4.2`: video && unavailable && YouTube && PoToken-on && duration!=null), token-expiry detection. (`isTranscribeEligible` is *unchanged* — its existing tests stand.)
 - **`youtube-session`:** mock sidecar HTTP + Innertube — refresh-once-on-expiry, TTL cache hit, sidecar-down → degrade.
 - **Bili QR state machine:** mock Bili responses — not-scanned / scanned-pending / success / timeout polling + SESSDATA extraction → store.
-- **Layer 2 routing:** mock resolver (youtube url → audio stream) — enqueue decision after eligibility relaxation; transcribe chain itself already covered.
+- **Layer 2 routing:** assert the post-adapter branch fires — a YouTube `unavailable` result with a known `video_duration` enqueues `transcribe` (and a `video_duration=null` result does **not**, degrading to `unavailable`); plus mock resolver (youtube url → audio stream). transcribe chain itself already covered.
 - **Step 0 spike = first gate** (see §7), formalized as a gated live test against the known-blocked 7qO8 video.
 - **No TDD for:** sidecar image selection, compose config, migration.
 
