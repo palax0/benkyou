@@ -72,7 +72,6 @@ export function CredentialsSection({ status }: { status: CredentialStatus }) {
         {state.phase === 'active' ? (
           <div className="flex flex-col gap-1">
             {/* qrDataUrl is a self-generated data: URI (server-side qrcode), not remote */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={state.qrDataUrl} alt={t('qrAlt')} width={220} height={220} />
             <span className="text-muted">{t(`qr.${state.status}` as 'qr.pending')}</span>
           </div>
