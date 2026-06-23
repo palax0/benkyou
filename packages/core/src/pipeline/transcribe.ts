@@ -5,6 +5,8 @@ import type { TranscribeView } from './transcribe-store';
 import { downloadToTmp, probeRemoteDurationSec } from './media-probe';
 import { transcribeRecorded } from '../ai/whisper';
 import { buildWhisperConfig, getUserSettings } from '../settings';
+import { parseYoutubeVideoId } from '../sources/youtube';
+import { resolveYoutubeAudioUrl } from '../sources/youtube-session';
 
 const WINDOW_SEC = 600;   // 10-min chunks keep each upload under the 25 MB Whisper limit
 const OVERLAP_SEC = 5;
@@ -68,6 +70,18 @@ function ffmpegSliceToOgg(srcPath: string, start: number, end: number): Promise<
   });
 }
 
+// YouTube audio-stream URLs are ephemeral (§4) — never stored as media_url; resolved
+// fresh here at download time. Everything else uses media_url ?? url verbatim.
+export async function resolveDownloadSource(
+  item: { mediaUrl: string | null; url: string },
+  resolver: (videoId: string) => Promise<string> = resolveYoutubeAudioUrl,
+): Promise<string> {
+  if (item.mediaUrl) return item.mediaUrl;
+  const videoId = parseYoutubeVideoId(item.url);
+  if (videoId) return resolver(videoId);
+  return item.url;
+}
+
 export async function transcribeItem(
   item: TranscribeView,
 ): Promise<{ segments: TranscriptSegment[]; flatText: string; durationSec: number }> {
@@ -75,7 +89,7 @@ export async function transcribeItem(
   if (!settings) throw new Error('user_settings not initialized');
   const cfg = buildWhisperConfig(settings);
 
-  const source = item.mediaUrl ?? item.url;
+  const source = await resolveDownloadSource(item);
   const durationSec = item.durationSec ?? (await probeRemoteDurationSec(source)) ?? 0;
   if (durationSec <= 0) throw new Error('Could not resolve audio duration for transcription');
 

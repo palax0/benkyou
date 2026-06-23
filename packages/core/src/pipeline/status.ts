@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDbClient, items, sources, aiUsage } from '../db';
 import { env } from '../config/env';
+import { pingPotokenSidecar } from '../sources/potoken-client';
 
 // A source is "failing" once it has missed this many consecutive polls. Tuned to
 // survive a transient blip but surface a genuinely broken feed promptly.
@@ -21,6 +22,16 @@ export interface FailedItemRow extends PipelineItemRow { lastError: string | nul
 export interface StageTokens { stage: string; calls: number; inputTokens: number; outputTokens: number; totalTokens: number; }
 export interface TokenItemRow { id: string | null; title: string | null; totalTokens: number; }
 export interface DimensionDrift { envDim: number; columnDim: number | null; settingsDim: number | null; consistent: boolean; }
+
+export interface PotokenHealth { configured: boolean; reachable: boolean | null; }
+
+// A dead sidecar causes clustered YouTube degradation — surface it (cf. source
+// consecutive_failures) so it isn't a silent failure (the extract-cloudflare trap, §5).
+export async function getPotokenHealth(): Promise<PotokenHealth> {
+  const url = env.POTOKEN_PROVIDER_URL;
+  if (!url) return { configured: false, reachable: null };
+  return { configured: true, reachable: await pingPotokenSidecar(url) };
+}
 
 const IN_FLIGHT = sql`${items.state} NOT IN ('done','failed')`;
 
@@ -186,20 +197,22 @@ export interface PipelineStatus {
   tokens: { today: StageTokens[]; week: StageTokens[]; topItems: TokenItemRow[]; noItem: number };
   drift: DimensionDrift;
   transcriptionMinutes: number;
+  potoken: PotokenHealth;
 }
 
 export async function getPipelineStatus(): Promise<PipelineStatus> {
-  const [stateCounts, queueHealth, orphans, inFlight, failed, tokenSummary, topItems, noItem, drift, transcriptionMinutes] =
+  const [stateCounts, queueHealth, orphans, inFlight, failed, tokenSummary, topItems, noItem, drift, transcriptionMinutes, potoken] =
     await Promise.all([
       getStateCounts(), getQueueHealth(), getOrphans(), getInFlight(50), getFailed(50),
       getTokenSummary(), getTokenTopItems(10), getTokenNoItem(), getDimensionDrift(),
-      getTranscriptionMinutes(),
+      getTranscriptionMinutes(), getPotokenHealth(),
     ]);
   return {
     stateCounts, queueHealth, orphans, inFlight, failed,
     tokens: { today: tokenSummary.today, week: tokenSummary.week, topItems, noItem },
     drift,
     transcriptionMinutes,
+    potoken,
   };
 }
 

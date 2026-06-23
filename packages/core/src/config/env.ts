@@ -29,6 +29,8 @@ const Schema = z.object({
   DEFAULT_WHISPER_BASE_URL: z.string().optional(),
   DEFAULT_WHISPER_API_KEY: z.string().optional(),
   DEFAULT_WHISPER_MODEL: z.string().optional(),
+
+  POTOKEN_PROVIDER_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof Schema>;

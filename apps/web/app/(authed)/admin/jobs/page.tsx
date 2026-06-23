@@ -165,6 +165,18 @@ export default async function JobsPage() {
         <h2 className="mb-2 font-semibold">{t('transcriptionMinutes')}</h2>
         <p className="text-sm">{s.transcriptionMinutes}</p>
       </section>
+
+      {/* 8. PoToken sidecar health (clustered YouTube degradation; design §5) */}
+      <section>
+        <h2 className="mb-2 font-semibold">{t('potokenHealth')}</h2>
+        {!s.potoken.configured ? (
+          <p className="text-sm text-slate-500">{t('potokenOff')}</p>
+        ) : s.potoken.reachable ? (
+          <p className="text-sm text-green-600">{t('potokenUp')}</p>
+        ) : (
+          <p className="text-sm text-red-600">{t('potokenDown')}</p>
+        )}
+      </section>
     </main>
   );
 }

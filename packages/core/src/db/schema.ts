@@ -100,6 +100,16 @@ export const sources = pgTable('sources', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+/* ─── platform_credentials ─── (per-platform scrape creds; design §1)
+   Bili: secret = SESSDATA (user, QR login). YT: secret = cached po_token (machine).
+   Adding a platform later = one more row, no schema change. */
+export const platformCredentials = pgTable('platform_credentials', {
+  platform: text('platform').primaryKey(), // 'youtube' | 'bilibili'
+  secret: text('secret'),
+  meta: jsonb('meta'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* ─── event_clusters ─── (forward-declared because items references it) */
 export const eventClusters = pgTable(
   'event_clusters',

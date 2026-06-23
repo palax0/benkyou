@@ -75,7 +75,17 @@
     "readerSection": "Reader endpoint (fallback)",
     "readerBaseUrlPlaceholder": "Reader base URL (e.g. https://r.jina.ai), blank to disable",
     "readerApiKeyPlaceholder": "Reader API key (optional)",
-    "readerApiKeyConfigured": "Reader API key saved — leave blank to keep"
+    "readerApiKeyConfigured": "Reader API key saved — leave blank to keep",
+    "credentialsSection": "Scrape credentials"
+  },
+  "credentials": {
+    "youtubeLabel": "YouTube PoToken",
+    "youtube": { "auto": "Auto (sidecar)", "off": "Off (no provider configured)" },
+    "bilibiliLabel": "Bilibili SESSDATA",
+    "bilibili": { "valid": "Valid", "expired": "Expired — re-scan", "unset": "Not set" },
+    "scanButton": "Scan QR to log in",
+    "qrAlt": "Bilibili login QR code",
+    "qr": { "pending": "Waiting for scan…", "scanned": "Scanned — confirm in the app", "success": "Logged in", "expired": "QR expired — try again", "error": "Failed: {message}" }
   },
   "paste": {
     "placeholder": "Paste an article or video URL…",
@@ -226,7 +236,11 @@
     "drift": "Dimension drift",
     "driftOk": "✓ Dimensions consistent ({dim})",
     "driftWarn": "⚠ Dimension mismatch: env={env} / column={col} / settings={set}. The column is authoritative (frozen at migration); embed fails until model output dim == column dim.",
-    "transcriptionMinutes": "Transcription minutes (last 7 days)"
+    "transcriptionMinutes": "Transcription minutes (last 7 days)",
+    "potokenHealth": "PoToken sidecar",
+    "potokenOff": "Not configured (YouTube credential capability off)",
+    "potokenUp": "Reachable",
+    "potokenDown": "Unreachable — YouTube items will degrade until the sidecar recovers"
   },
   "banner": {
     "failingSources": "{n} source(s) failing to fetch",
