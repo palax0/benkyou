@@ -48,7 +48,26 @@ async function loadTokenFromCache(): Promise<SessionToken | null> {
   return { poToken: row.secret, visitorData: meta.visitorData };
 }
 
-async function refreshTokenFromSidecar(): Promise<SessionToken> {
+// Collapse concurrent calls onto one in-flight promise; the next call after it settles
+// starts fresh. The 6h cache handles steady-state dedup — this only closes the cold-start /
+// post-expiry window where every queued job misses the cache at once and would otherwise
+// each spawn a BotGuard run + sidecar fetch.
+export function singleFlight<T>(fn: () => Promise<T>): () => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return () => {
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      try {
+        return await fn();
+      } finally {
+        inFlight = null;
+      }
+    })();
+    return inFlight;
+  };
+}
+
+const refreshTokenFromSidecar = singleFlight(async (): Promise<SessionToken> => {
   const providerUrl = env.POTOKEN_PROVIDER_URL;
   if (!providerUrl) throw new TransientFetchError('POTOKEN_PROVIDER_URL unset during refresh');
   // A no-player Innertube yields visitor_data cheaply (design §2 step 1).
@@ -57,7 +76,7 @@ async function refreshTokenFromSidecar(): Promise<SessionToken> {
   const poToken = await fetchAnonymousPoToken(providerUrl, visitorData);
   await upsertPlatformCredential('youtube', { secret: poToken, meta: { visitorData, fetchedAt: Date.now() } });
   return { poToken, visitorData };
-}
+});
 
 async function buildInnertubeWithToken(tok: SessionToken | null): Promise<Innertube> {
   if (!tok) return Innertube.create(INNERTUBE_OPTIONS);
@@ -97,7 +116,16 @@ export async function withYoutubeSession<T>(
 export async function resolveYoutubeAudioUrl(videoId: string): Promise<string> {
   return withYoutubeSession(async (yt) => {
     const info = await yt.getInfo(videoId);
-    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    let format: ReturnType<typeof info.chooseFormat>;
+    try {
+      format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    } catch {
+      // chooseFormat THROWS (FormatError) rather than returning null when no audio format
+      // matched — usually a stream withheld without a valid PoToken. Treat it as a token-expiry
+      // smell so withYoutubeSession refreshes once and retries; a still-missing format after the
+      // refresh then propagates → degrade (same outcome as an empty deciphered URL below).
+      throw new YoutubeTokenExpiryError({ durationSeconds: null, title: null, cues: [] });
+    }
     const url = await format.decipher(yt.session.player);
     if (!url) throw new YoutubeTokenExpiryError({ durationSeconds: null, title: null, cues: [] });
     return url;

@@ -37,6 +37,16 @@ describe('parseSessdataFromSetCookie', () => {
   test('null when SESSDATA absent', () => {
     expect(parseSessdataFromSetCookie(['bili_jct=xyz'])).toEqual({ sessdata: null, expiresAt: null });
   });
+  test('Max-Age takes precedence over Expires (RFC 6265 §5.3)', () => {
+    const before = Date.now();
+    const r = parseSessdataFromSetCookie([
+      'SESSDATA=mx; Path=/; Max-Age=3600; Expires=Wed, 21 Oct 2026 07:28:00 GMT; HttpOnly',
+    ]);
+    expect(r.sessdata).toBe('mx');
+    // Max-Age → now+1h, well below the far-future Expires epoch — proves Max-Age won.
+    expect(r.expiresAt!).toBeGreaterThanOrEqual(before + 3600 * 1000);
+    expect(r.expiresAt!).toBeLessThanOrEqual(Date.now() + 3600 * 1000);
+  });
 });
 
 describe('generateBilibiliQr', () => {

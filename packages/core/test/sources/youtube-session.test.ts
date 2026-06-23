@@ -3,6 +3,7 @@ import {
   withYoutubeSession,
   isYoutubeTokenExpiryError,
   YoutubeTokenExpiryError,
+  singleFlight,
   type SessionDeps,
 } from '../../src/sources/youtube-session.js';
 import { TransientFetchError } from '../../src/sources/types.js';
@@ -81,5 +82,36 @@ describe('withYoutubeSession', () => {
     expect(d.loadToken).not.toHaveBeenCalled();
     expect(d.refreshToken).not.toHaveBeenCalled();
     expect(d.buildInnertube).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('singleFlight', () => {
+  test('concurrent callers share one in-flight invocation', async () => {
+    let calls = 0;
+    const resolvers: Array<(v: number) => void> = [];
+    const gated = singleFlight(() => {
+      calls += 1;
+      return new Promise<number>((r) => resolvers.push(r));
+    });
+    const a = gated();
+    const b = gated();
+    expect(calls).toBe(1);
+    resolvers[0]!(7);
+    expect(await a).toBe(7);
+    expect(await b).toBe(7);
+  });
+
+  test('a call after settle re-invokes (no stale memo)', async () => {
+    let calls = 0;
+    const gated = singleFlight(async () => { calls += 1; return calls; });
+    expect(await gated()).toBe(1);
+    expect(await gated()).toBe(2);
+  });
+
+  test('rejection clears the in-flight slot so the next call retries', async () => {
+    let calls = 0;
+    const gated = singleFlight(async () => { calls += 1; throw new Error(`fail ${calls}`); });
+    await expect(gated()).rejects.toThrow('fail 1');
+    await expect(gated()).rejects.toThrow('fail 2');
   });
 });

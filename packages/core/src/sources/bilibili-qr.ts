@@ -21,9 +21,17 @@ export function parseSessdataFromSetCookie(setCookie: string[]): { sessdata: str
   for (const c of setCookie) {
     const m = /(?:^|;\s*)SESSDATA=([^;]+)/.exec(c);
     if (!m) continue;
-    const exp = /Expires=([^;]+)/i.exec(c);
-    const expiresAt = exp ? Date.parse(exp[1]!) : NaN;
-    return { sessdata: m[1] ?? null, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null };
+    // RFC 6265 §5.3: Max-Age (seconds-from-now) takes precedence over Expires when both present.
+    const maxAge = /(?:^|;\s*)Max-Age=(-?\d+)/i.exec(c);
+    const expires = /(?:^|;\s*)Expires=([^;]+)/i.exec(c);
+    let expiresAt: number | null = null;
+    if (maxAge) {
+      expiresAt = Date.now() + Number(maxAge[1]) * 1000;
+    } else if (expires) {
+      const parsed = Date.parse(expires[1]!);
+      expiresAt = Number.isFinite(parsed) ? parsed : null;
+    }
+    return { sessdata: m[1] ?? null, expiresAt };
   }
   return { sessdata: null, expiresAt: null };
 }
