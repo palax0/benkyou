@@ -4,6 +4,8 @@ dist
 build
 coverage
 pgdata
+**/pgdata
+.claude
 .superpowers
 .git
 .github

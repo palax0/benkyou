@@ -23,6 +23,7 @@ services:
     # reached via the `postgres` service name, not the host's published port.
     environment:
       DATABASE_URL: postgres://benkyou:benkyou@postgres:5432/benkyou
+      POTOKEN_PROVIDER_URL: http://potoken-provider:4416
     depends_on:
       postgres:
         condition: service_healthy

@@ -32,4 +32,4 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
 WORKDIR /app/apps/web
 EXPOSE 3000
-CMD ["pnpm", "start"]
+CMD ["node", "./node_modules/next/dist/bin/next", "start"]
