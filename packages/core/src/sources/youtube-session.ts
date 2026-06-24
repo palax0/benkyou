@@ -22,12 +22,18 @@ export function isPotokenEnabled(): boolean {
   return Boolean(env.POTOKEN_PROVIDER_URL);
 }
 
-// Token-expiry "smell" (§0): get_transcript 400, withheld stream ("No valid URL to
-// decipher"), or a 403. TransientFetchError is explicitly NOT expiry (network/5xx → retry).
+// Token-expiry "smell" (§0): withheld stream ("No valid URL to decipher") or a 403.
+// TransientFetchError is explicitly NOT expiry (network/5xx → retry).
+//
+// get_transcript is the exception: YouTube's bot detection now 100%-blocks that endpoint
+// (HTTP 400 FAILED_PRECONDITION) regardless of PoToken — refreshing cannot fix it, so it
+// must NOT count as expiry or every captioned video burns a wasted BotGuard refresh.
+// (Confirmed upstream: github.com/LuanRT/YouTube.js#1102. Real fix is the yt-dlp backend.)
 export function isYoutubeTokenExpiryError(err: unknown): boolean {
   if (err instanceof YoutubeTokenExpiryError) return true;
   if (err instanceof TransientFetchError) return false;
   const msg = err instanceof Error ? err.message : String(err);
+  if (/get_transcript/.test(msg)) return false;
   return /\b40[03]\b/.test(msg) || /decipher/i.test(msg);
 }
 
