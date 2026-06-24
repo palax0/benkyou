@@ -28,6 +28,15 @@ describe('isYoutubeTokenExpiryError', () => {
     [new YoutubeTokenExpiryError({ durationSeconds: 10, title: null, cues: [] }), true],
     [new TransientFetchError('502'), false],
     [new Error('totally unrelated'), false],
+    // get_transcript is 100%-blocked by YouTube bot detection (FAILED_PRECONDITION),
+    // not a token problem — must NOT be treated as expiry or every captioned video
+    // burns a wasted BotGuard refresh.
+    [
+      new Error(
+        'Request to https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false&alt=json failed with status code 400',
+      ),
+      false,
+    ],
   ])('%s', (err, expected) => {
     expect(isYoutubeTokenExpiryError(err)).toBe(expected);
   });
