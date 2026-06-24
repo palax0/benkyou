@@ -58,7 +58,7 @@ Rationale (and pushback on the BYO framing): the reader/Whisper BYO pattern exis
 
 **Invocation safety:** spawn with an **arg array, never a shell**; pass the canonical watch URL we reconstruct from the **parsed `videoId`** (`parseYoutubeVideoId`), never the raw user-pasted string. This matches the existing `spawn('ffmpeg', args)` pattern in `transcribe.ts`.
 
-**Serverless:** unchanged. Serverless cannot spawn a subprocess and already degrades YouTube to `unavailable` (today via `isPotokenEnabled()` being false when `POTOKEN_PROVIDER_URL` is unset). No regression.
+**Serverless:** YouTube degrades to `unavailable` + continue, same end-state as today. One **named consequence** of full retirement: today serverless still extracts metadata (title/duration) via the pure-JS youtubei.js path even without a token; removing youtubei.js means serverless YouTube items get **no metadata either** (they continue on the pasted URL as title, `contentType='video'`, `transcript_status='unavailable'`). This is an accepted minor degradation — serverless is the secondary mode and already does not transcribe; reintroducing youtubei.js solely for serverless metadata would resurrect the dependency we are deleting. The degrade is enforced by a **binding gate, not best-effort** — see §5.
 
 ---
 
@@ -72,8 +72,10 @@ NEW  sources/ytdlp.ts                       subprocess wrapper + PURE parsers
        parseJson3Cues(json)                 pure → RawCue[]
        selectCaptionTrack(info, prefs)      pure → manual → auto → none
        classifyYtdlpError(code, stderr)     pure → 'definitive' | 'transient'
-       fetchYoutubeTrack(videoId, run?)     spawns: -J + json3 → RawSubtitleTrack
+       fetchYoutubeTrack(videoId, run?)     GATE: !isYoutubeBackendEnabled() → degrade, NO spawn
+                                            else spawns: -J + json3 → RawSubtitleTrack
        downloadYoutubeAudio(videoId, run?)  spawns: -f bestaudio → { path, cleanup }
+                                            (only reached post-gate via the Layer-2 handoff)
 
 MOD  sources/youtube.ts        fetchYoutubeSubtitle delegates to ytdlp; isDefinitiveYoutubeError
                                re-expressed via classifyYtdlpError; drop youtubei.js imports.
@@ -121,40 +123,72 @@ The transcribe stage's existing degrade-on-failure contract is preserved (per `2
 
 ## §5. Capability gate + sidecar fate
 
-`isPotokenEnabled()` (= `POTOKEN_PROVIDER_URL` set) is replaced by **`isYoutubeBackendEnabled()`**, consumed by `extract.ts`'s Layer-2 gate (and conceptually by the adapter). Its exact predicate is **decided by the §6 spike**:
+`isPotokenEnabled()` (= `POTOKEN_PROVIDER_URL` set) is replaced by **`isYoutubeBackendEnabled()`**. Its exact predicate is **decided by the §6 spike**:
 
 - **If yt-dlp needs the pot provider for our (public, anonymous) videos:** keep the sidecar; flip its consumer from our `fetchAnonymousPoToken` to yt-dlp's `bgutil-ytdlp-pot-provider` **plugin** (installed in the worker image, configured to reach the sidecar). Gate = `docker mode && POTOKEN_PROVIDER_URL set`.
 - **If yt-dlp works without the pot provider:** **drop the sidecar entirely** (remove the compose service + `POTOKEN_PROVIDER_URL`). Gate = `docker mode` (subprocess available).
 
-**Per the user, the sidecar drop is left as a spike outcome, not decided now.** Both branches keep serverless = off.
+**Per the user, the sidecar drop is left as a spike outcome, not decided now.**
+
+**Binding requirement — the gate guards BOTH consumers, not just Layer-2.** Full retirement moves *metadata and captions* onto the subprocess too, so the gate must short-circuit the **caption path** as well, otherwise the serverless `/api/cron/work` extract queue would attempt a subprocess that cannot run:
+
+- **`fetchYoutubeTrack` (caption path):** first line is `if (!isYoutubeBackendEnabled()) return <degraded RawSubtitleTrack: empty cues, null duration/title>;` — **no spawn**. The adapter then degrades to `unavailable` + continue per the M2a contract.
+- **`extractItem` Layer-2 gate (`isYoutubeWhisperHandoff`):** unchanged — already gated on this capability; audio download never reached when off.
+
+This is a **hard gate, not best-effort.** Required test: with the backend disabled (serverless / unset), `fetchYoutubeTrack` returns a degraded track **without invoking the injected `run`** (assert the subprocess runner is never called), and `extractItem` produces `transcript_status='unavailable'` + advance. Both gate branches keep serverless = off.
 
 ---
 
 ## §6. Spike-first gate (do NOT repeat §0's mistake)
 
-The `2026-06-22` design failed in production precisely because its load-bearing assumption (§7) was never validated before building. **Task 1 of the implementation plan is a gated live spike**, before any production code:
+The `2026-06-22` design failed in production precisely because its load-bearing assumption (§7) was never validated before building. **Task 1 of the implementation plan is a gated live spike** (`YTDLP_LIVE=1` against `7qO8`, the known-blocked video), before any production code. Run **each probe in both sidecar configurations** (with the pot provider, without it) and record the full matrix:
 
-`YTDLP_LIVE=1` against `7qO8` (the known-blocked video), proving:
-1. `yt-dlp -J` returns `title` + `duration`.
-2. json3 captions download (the `zh-Hans` track).
-3. `yt-dlp -f bestaudio` downloads playable audio.
-4. **With/without pot provider** — run (1)–(3) both with the sidecar and without, to settle §5 (keep vs drop the sidecar).
+| # | Probe | with sidecar | without sidecar |
+|---|---|---|---|
+| 1 | `yt-dlp -J` → `title` + `duration` | record pass/fail | record pass/fail |
+| 2 | json3 captions download (`zh-Hans`) | record pass/fail | record pass/fail |
+| 3 | `yt-dlp -f bestaudio` → playable audio | record pass/fail | record pass/fail |
 
-If captions still fail *with* yt-dlp, **stop and re-diagnose** — do not invest in the full migration on an unproven assumption.
+**Pass/fail conditions are hard gates, not advisory:**
+
+- **Probe 2 (captions) must pass in at least one configuration** — else the migration premise is dead for captions: **STOP and re-diagnose**, do not build.
+- **Probe 1 (metadata) must pass in the chosen configuration** — `video_duration` feeds the Layer-2 gate and `title` refines the item; if captions pass, metadata effectively must too, but assert it.
+- **Probe 3 (audio) is a hard gate for the Whisper fallback, not advisory.** It is the load-bearing proof for caption-less videos. If captions+metadata pass but audio fails: do **not** stop the migration — instead **explicitly descope to caption-only this round**: the no-caption → Whisper path for YouTube is dropped, caption-less YouTube videos degrade to `unavailable` + continue (same as a no-caption Bilibili), and §4.2 + the Layer-2 handoff are deferred to a follow-up. Record this as an explicit decision, not a silent gap.
+- **Sidecar decision (settles §5):** the **minimal configuration that passes all required gates wins.** If the *without-sidecar* column passes captions+metadata(+audio), **drop the sidecar**; otherwise keep it and wire the pot plugin.
+
+The spike's recorded matrix + the descope/sidecar decisions are a written output of Task 1, gating every subsequent task.
 
 ---
 
 ## §7. Error classification (replaces token-expiry "smells")
 
-yt-dlp + its pot plugin own pot rotation internally, so failures surfacing to us are no longer "token-expiry smells." `classifyYtdlpError(exitCode, stderr)`:
+yt-dlp + its pot plugin own pot rotation internally, so failures surfacing to us are no longer "token-expiry smells."
 
-- **definitive → degrade** (`transcript_status='unavailable'`, do **not** burn the retry budget): content-unavailability — "Private video", "Video unavailable", "has been removed", "members-only", "Sign in to confirm your age", geo-block ("not available in your country").
-- **transient → throw** (pg-boss retries; dead-letter then degrades): network / 5xx, "Unable to download webpage", **429 "automated queries"** (IP-reputation — backoff-retry can clear it), and bot/attestation failures (a recovered sidecar can clear them).
-- **unknown nonzero exit → transient** (default). Safer: the M2a "never fail the item" contract holds regardless, because the caption adapter catches everything → `unavailable`; this classifier only decides *retry-then-degrade* vs *degrade-now*.
+**The two consuming stages have OPPOSITE terminal semantics — this is the crux** (verified in `queue/runner.ts`):
 
-**Deliberate call:** 429 and bot-detection are **transient**, not definitive — they are environment/IP conditions a retry (or recovered sidecar) can clear, unlike a private video. (Alternative, if retry-budget waste becomes a problem: treat persistent bot-blocks as immediate degrade. Not chosen now.)
+| Stage | On exhausted retries (`onFail`) | Therefore a thrown error eventually becomes |
+|---|---|---|
+| **extract** (caption path) | `handleDeadLetter` → `markFailed` (`runner.ts:50`) | **`state='failed'`** |
+| **transcribe** (audio path) | `handleTranscribeDeadLetter` → `degradeTranscriptAndAdvance` (`runner.ts:70`) | **`unavailable` + continue** |
 
-The M2a **hard invariant is preserved**: any definitive failure → `unavailable` + continue, never throw to `failed`; only genuine transient throws → pg-boss retry. This applies at the caption layer (`fetchYoutubeSubtitle`). The transcribe stage independently degrades on any failure (M2b contract).
+So "throw → retry → degrade" holds **only for the audio path**. On the **caption path, throw → retry → `failed`.** A naïve "429/bot = transient" therefore *fails* the item — violating the M2a "never fail on a scrape block" invariant. The fix is to classify by **desired terminal outcome**, mapped per stage.
+
+`classifyYtdlpError(exitCode, stderr) → 'transient' | 'definitive'`:
+
+- **`transient`** = genuine infrastructure only: DNS / connection reset / timeout / 5xx / "Unable to download webpage" from a network cause.
+- **`definitive`** = everything that won't clear by an immediate same-IP retry:
+  - content-unavailability — "Private video", "Video unavailable", "has been removed", "members-only", "Sign in to confirm your age", geo-block;
+  - **anti-bot — 429 "automated queries" and bot/attestation failures.** (Moved here from "transient." A same-IP retry inside the backoff window almost never clears a 429, and yt-dlp+plugin already retried pot internally before surfacing the error — so external retry is near-zero value and only risks `failed`.)
+- **unknown nonzero exit → `definitive`** (default). Safer on the caption path: degrade-and-continue rather than risk `failed`.
+
+**Per-stage mapping:**
+
+- **Caption layer (`fetchYoutubeTrack` / adapter):** `definitive` → return empty-cue track → `unavailable` + continue, **never throw**. `transient` → throw `TransientFetchError` → pg-boss retry → (genuine infra still down at exhaustion → `failed`, which is the *correct* signal for a real outage and is unchanged M2a behavior).
+- **Audio layer (`downloadYoutubeAudio` / transcribe):** any yt-dlp failure → throw; transcribe's `onFail` degrades to `unavailable` regardless (M2b). The `definitive`/`transient` split is immaterial here because the terminal is already degrade; we deliberately do **not** add an immediate-degrade short-circuit (it would only save at most `retryLimit=2` retries — not worth the special case).
+
+**Deliberate call (revised from the draft):** 429 / bot-detection are **definitive at the caption layer** — degrade immediately, do not retry. Rationale: the extract terminal is `markFailed`, and a same-IP retry cannot clear an IP-reputation 429. This is faithful to the pre-migration behavior, where `isYoutubeTokenExpiryError` degraded (returned the partial track) rather than failing the item. Only genuine network/5xx throws — its eventual `failed`-on-exhaustion is the correct surfacing of a real outage.
+
+The M2a **hard invariant is preserved**: on the caption path, only a genuine transient ever throws; every block (content or anti-bot) degrades to `unavailable` + continue.
 
 ---
 
@@ -170,7 +204,9 @@ The M2a **hard invariant is preserved**: any definitive failure → `unavailable
 
 Follows existing conventions (Testcontainers for DB integration, live tests off by default; subprocess mocked via injected `run`, not MSW — it's `spawn`, not HTTP).
 
-- **Pure-function TDD:** `parseJson3Cues` (json3 → cues, incl. multi-seg events, empty-cue filtering, missing fields), `classifyYtdlpError` (definitive vs transient matrix incl. 429/bot/private/network), `selectCaptionTrack` (manual-preferred → auto-fallback → none), `buildYtdlpArgs` (videoId → canonical URL, no shell injection, pot args when enabled).
+- **Pure-function TDD:** `parseJson3Cues` (json3 → cues, incl. multi-seg events, empty-cue filtering, missing fields), `classifyYtdlpError` — explicit matrix asserting **429 & bot/attestation → `definitive`**, private/removed/geo/age → `definitive`, network/5xx/timeout → `transient`, unknown-exit → `definitive`; `selectCaptionTrack` (manual-preferred → auto-fallback → none), `buildYtdlpArgs` (videoId → canonical URL, no shell injection, pot args when enabled).
+- **Per-stage terminal mapping (the §7 crux):** caption layer — a `definitive` (incl. 429/bot) result degrades to `unavailable` + continue and **does not throw** (assert the item never reaches `failed`); a `transient` result throws `TransientFetchError`. This is the regression guard against re-failing items on anti-bot blocks.
+- **Backend-off gate (§5, binding):** with `isYoutubeBackendEnabled()` false, `fetchYoutubeTrack` returns a degraded track **without invoking the injected `run`** (assert the runner is never called) → adapter yields `unavailable`; serverless extract never spawns.
 - **Subprocess wrappers:** inject a fake `run` → assert arg construction, stdout-JSON parse, exit-code → classification, tmp cleanup.
 - **Unchanged predicates retested under new names:** `isYoutubeWhisperHandoff` (video && unavailable && YouTube && backend-on && duration != null), `transcribe-policy` branches. Their existing tests stand.
 - **`transcribe.ts` YouTube branch:** mock `downloadYoutubeAudio` (videoId → tmp path) → asserts it bypasses `downloadToTmp`/`probeRemoteDurationSec` and feeds the existing chunk chain.
