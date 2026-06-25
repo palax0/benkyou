@@ -84,3 +84,50 @@ export function selectCaptionTrack(info: YtdlpInfo, prefs: string[] = CAPTION_LA
   if (auto) return { lang: auto, kind: 'auto' };
   return null;
 }
+
+export type YtdlpMode =
+  | { kind: 'info' }
+  | { kind: 'subs'; lang: string; outTemplate: string }
+  | { kind: 'audio'; outTemplate: string };
+
+export interface YtdlpArgsOpts {
+  mode: YtdlpMode;
+  potProviderBaseUrl?: string | null;
+}
+
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+
+// [SPIKE-SELECTED] The pot plugin's extractor-arg key. Default is the bgutil HTTP
+// provider form; Task 1 confirms the literal that reaches the sidecar (POT_EXTRACTOR_ARG).
+const POT_EXTRACTOR_ARG_KEY = 'youtubepot-bgutilhttp:base_url';
+
+// Reconstruct the canonical watch URL from the PARSED, VALIDATED videoId — never the
+// raw pasted string (spec §2). videoId is validated here as defence-in-depth even though
+// callers pass parseYoutubeVideoId() output. All args are passed as an array to spawn
+// (no shell), so even a hostile id cannot inject — but we refuse it anyway.
+export function buildYtdlpArgs(videoId: string, opts: YtdlpArgsOpts): string[] {
+  if (!YT_ID.test(videoId)) {
+    throw new Error(`Refusing to build yt-dlp args for non-canonical videoId: ${videoId}`);
+  }
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const args = ['--no-playlist', '--no-warnings'];
+  if (opts.potProviderBaseUrl) {
+    args.push('--extractor-args', `${POT_EXTRACTOR_ARG_KEY}=${opts.potProviderBaseUrl}`);
+  }
+  switch (opts.mode.kind) {
+    case 'info':
+      args.push('-J', '--skip-download');
+      break;
+    case 'subs':
+      args.push(
+        '--skip-download', '--write-subs', '--write-auto-subs',
+        '--sub-langs', opts.mode.lang, '--sub-format', 'json3', '-o', opts.mode.outTemplate,
+      );
+      break;
+    case 'audio':
+      args.push('-f', 'bestaudio', '-o', opts.mode.outTemplate);
+      break;
+  }
+  args.push(url);
+  return args;
+}

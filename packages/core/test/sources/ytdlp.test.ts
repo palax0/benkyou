@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { classifyYtdlpError, parseJson3Cues, selectCaptionTrack } from '../../src/sources/ytdlp.js';
+import { buildYtdlpArgs, classifyYtdlpError, parseJson3Cues, selectCaptionTrack } from '../../src/sources/ytdlp.js';
 
 describe('parseJson3Cues', () => {
   test('joins multi-seg events; start/end in seconds', () => {
@@ -111,5 +111,45 @@ describe('selectCaptionTrack', () => {
   test('no captions anywhere → null', () => {
     expect(selectCaptionTrack({ subtitles: {}, automatic_captions: {} })).toBeNull();
     expect(selectCaptionTrack({})).toBeNull();
+  });
+});
+
+describe('buildYtdlpArgs', () => {
+  const URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+  test('info mode → -J --skip-download against the canonical URL (URL last)', () => {
+    const args = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'info' } });
+    expect(args).toContain('-J');
+    expect(args).toContain('--skip-download');
+    expect(args).toContain('--no-playlist');
+    expect(args[args.length - 1]).toBe(URL);
+  });
+
+  test('subs mode → write-subs + write-auto-subs + json3 + lang + output template', () => {
+    const args = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'subs', lang: 'en', outTemplate: '/tmp/d/sub.%(ext)s' } });
+    expect(args).toEqual(expect.arrayContaining([
+      '--write-subs', '--write-auto-subs', '--sub-langs', 'en', '--sub-format', 'json3', '-o', '/tmp/d/sub.%(ext)s',
+    ]));
+    expect(args[args.length - 1]).toBe(URL);
+  });
+
+  test('audio mode → -f bestaudio + output template', () => {
+    const args = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'audio', outTemplate: '/tmp/d/audio.%(ext)s' } });
+    expect(args).toEqual(expect.arrayContaining(['-f', 'bestaudio', '-o', '/tmp/d/audio.%(ext)s']));
+    expect(args[args.length - 1]).toBe(URL);
+  });
+
+  test('pot provider set → adds --extractor-args (only when configured)', () => {
+    const off = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'info' } });
+    expect(off).not.toContain('--extractor-args');
+    const on = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'info' }, potProviderBaseUrl: 'http://sidecar:4416' });
+    const i = on.indexOf('--extractor-args');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(on[i + 1]).toContain('http://sidecar:4416');
+  });
+
+  test('rejects a non-canonical videoId (no shell injection via the URL)', () => {
+    expect(() => buildYtdlpArgs('; rm -rf /', { mode: { kind: 'info' } })).toThrow(/non-canonical/);
+    expect(() => buildYtdlpArgs('dQw4w9WgXcQ&malicious', { mode: { kind: 'info' } })).toThrow(/non-canonical/);
   });
 });
