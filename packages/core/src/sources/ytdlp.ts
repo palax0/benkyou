@@ -34,7 +34,7 @@ const DEFINITIVE_PATTERNS: RegExp[] = [
   /has been removed|been terminated|account associated with this video has been/i,
   /members?-only|join this channel/i,
   /sign in to confirm your age|age-restricted/i,
-  /not available in your country|blocked it in your country|geo/i,
+  /not available in your country|blocked it in your country|geo.?block|geo.?restrict/i,
   /HTTP Error 429|too many requests|automated queries/i,
   /confirm you'?re not a bot/i,
 ];

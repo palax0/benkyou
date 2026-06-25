@@ -66,4 +66,16 @@ describe('classifyYtdlpError', () => {
   test('unknown nonzero exit defaults to definitive (safer on the caption path)', () => {
     expect(classifyYtdlpError(1, 'ERROR: something we have never seen')).toBe('definitive');
   });
+
+  test('"geo" substring alone does not over-match; transient path wins', () => {
+    expect(
+      classifyYtdlpError(1, 'ERROR: Unable to download webpage from https://geo.youtube.com timed out'),
+    ).toBe('transient');
+  });
+
+  test('429 co-occurring with network text stays definitive (order matters)', () => {
+    expect(
+      classifyYtdlpError(1, 'ERROR: HTTP Error 429: Too Many Requests. Unable to download webpage'),
+    ).toBe('definitive');
+  });
 });
