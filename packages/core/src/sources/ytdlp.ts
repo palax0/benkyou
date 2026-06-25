@@ -76,7 +76,8 @@ export function classifyYtdlpError(_exitCode: number, stderr: string): 'transien
 export const CAPTION_LANG_PREFS = ['zh-Hans', 'zh-Hant', 'zh', 'en'];
 
 function pickLang(map: Record<string, unknown[]> | undefined, prefs: string[]): string | null {
-  const langs = Object.keys(map ?? {}).filter((l) => (map![l]?.length ?? 0) > 0);
+  const resolved = map ?? {};
+  const langs = Object.keys(resolved).filter((l) => (resolved[l]?.length ?? 0) > 0);
   if (langs.length === 0) return null;
   for (const p of prefs) if (langs.includes(p)) return p;
   return langs[0]!;
@@ -116,6 +117,7 @@ export function buildYtdlpArgs(videoId: string, opts: YtdlpArgsOpts): string[] {
     throw new Error(`Refusing to build yt-dlp args for non-canonical videoId: ${videoId}`);
   }
   const url = `https://www.youtube.com/watch?v=${videoId}`;
+  // --no-warnings: suppress yt-dlp warning noise on stderr so it doesn't pollute classifyYtdlpError pattern matching.
   const args = ['--no-playlist', '--no-warnings'];
   if (opts.potProviderBaseUrl) {
     args.push('--extractor-args', `${POT_EXTRACTOR_ARG_KEY}=${opts.potProviderBaseUrl}`);
@@ -126,6 +128,7 @@ export function buildYtdlpArgs(videoId: string, opts: YtdlpArgsOpts): string[] {
       break;
     case 'subs':
       args.push(
+        // --skip-download: write subtitles only; do not also fetch the audio stream.
         '--skip-download', '--write-subs', '--write-auto-subs',
         '--sub-langs', opts.mode.lang, '--sub-format', 'json3', '-o', opts.mode.outTemplate,
       );

@@ -8,8 +8,12 @@ describe('pingPotokenSidecar', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
     expect(await pingPotokenSidecar('http://sidecar:4416')).toBe(true);
   });
-  test('false on error / non-2xx', async () => {
+  test('false on network throw', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
+    expect(await pingPotokenSidecar('http://sidecar:4416')).toBe(false);
+  });
+  test('false on non-2xx HTTP status (e.g. 503)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 503 }));
     expect(await pingPotokenSidecar('http://sidecar:4416')).toBe(false);
   });
 });

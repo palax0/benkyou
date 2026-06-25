@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
-// PoToken capability ON for these tests (docker default + provider URL → backend enabled).
-vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://sidecar:4416');
+// docker is the default DEPLOY_MODE → isYoutubeBackendEnabled() is true (provider URL irrelevant under SIDECAR=drop).
 
 // (yt-dlp backend: no youtubei.js / session mock needed — fetchYoutubeTrack is mocked at the boundary)
 

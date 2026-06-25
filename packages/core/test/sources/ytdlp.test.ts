@@ -128,7 +128,7 @@ describe('buildYtdlpArgs', () => {
   test('subs mode → write-subs + write-auto-subs + json3 + lang + output template', () => {
     const args = buildYtdlpArgs('dQw4w9WgXcQ', { mode: { kind: 'subs', lang: 'en', outTemplate: '/tmp/d/sub.%(ext)s' } });
     expect(args).toEqual(expect.arrayContaining([
-      '--write-subs', '--write-auto-subs', '--sub-langs', 'en', '--sub-format', 'json3', '-o', '/tmp/d/sub.%(ext)s',
+      '--skip-download', '--write-subs', '--write-auto-subs', '--sub-langs', 'en', '--sub-format', 'json3', '-o', '/tmp/d/sub.%(ext)s',
     ]));
     expect(args[args.length - 1]).toBe(URL);
   });
@@ -298,5 +298,13 @@ describe('downloadYoutubeAudio', () => {
     const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'ERROR: boom' }));
     const { downloadYoutubeAudio } = await import('../../src/sources/ytdlp.js');
     await expect(downloadYoutubeAudio('dQw4w9WgXcQ', run)).rejects.toThrow(/audio download failed/);
+  });
+
+  test('exit 0 but no audio file written → throws (produced no audio)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    // run resolves cleanly but writes nothing into the -o directory
+    const run = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }));
+    const { downloadYoutubeAudio } = await import('../../src/sources/ytdlp.js');
+    await expect(downloadYoutubeAudio('dQw4w9WgXcQ', run)).rejects.toThrow(/produced no audio/);
   });
 });
