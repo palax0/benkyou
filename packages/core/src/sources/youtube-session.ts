@@ -2,8 +2,26 @@ import { Innertube } from 'youtubei.js';
 import { env } from '../config/env';
 import { INNERTUBE_OPTIONS, type RawSubtitleTrack } from './youtube';
 import { TransientFetchError } from './types';
-import { fetchAnonymousPoToken } from './potoken-client';
 import { getPlatformCredential, upsertPlatformCredential } from './platform-credentials';
+
+interface GetPotResponse {
+  po_token?: string;
+}
+
+// Inlined from the retired PoToken client (deleted in Task 9). youtube-session.ts
+// itself is retired in Task 12 — keeping this here avoids a dangling import in the interim.
+async function fetchAnonymousPoToken(providerUrl: string, visitorData: string): Promise<string> {
+  const base = providerUrl.replace(/\/$/, '');
+  const res = await fetch(`${base}/get_pot`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content_binding: visitorData }),
+  });
+  if (!res.ok) throw new Error(`PoToken provider /get_pot failed: ${res.status} ${res.statusText}`);
+  const json = (await res.json()) as GetPotResponse;
+  if (!json.po_token) throw new Error('PoToken provider response missing po_token');
+  return json.po_token;
+}
 
 const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 
