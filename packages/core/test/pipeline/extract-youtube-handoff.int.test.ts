@@ -5,7 +5,7 @@ import postgres from 'postgres';
 // PoToken capability ON for these tests (docker default + provider URL → backend enabled).
 vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://sidecar:4416');
 
-// (the youtube-session vi.mock block is deleted — that module no longer gates Layer-2 handoff)
+// (yt-dlp backend: no youtubei.js / session mock needed — fetchYoutubeTrack is mocked at the boundary)
 
 describe('extract → YouTube Whisper handoff', () => {
   let db: TestDatabase; let sql: postgres.Sql;
