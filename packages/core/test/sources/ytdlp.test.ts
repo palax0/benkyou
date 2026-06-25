@@ -197,7 +197,7 @@ describe('fetchYoutubeTrack', () => {
     vi.resetModules();
   });
 
-  // The backend-off gate writes a json3 file the wrapper reads; we fake `run` to create it.
+  // Gate hard-stops before any spawn: run must never be invoked, so no file is written.
   test('backend OFF → degraded track WITHOUT invoking run (the §5 hard gate)', async () => {
     vi.stubEnv('DEPLOY_MODE', 'serverless'); // off
     const run = vi.fn();
@@ -212,6 +212,21 @@ describe('fetchYoutubeTrack', () => {
     const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'ERROR: HTTP Error 503' }));
     // Dynamic import after resetModules: both fetchYoutubeTrack and TransientFetchError must
     // come from the same fresh module instance so instanceof resolves to the same class.
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const { TransientFetchError: TFE } = await import('../../src/sources/types.js');
+    await expect(fetchYoutubeTrack('dQw4w9WgXcQ', run)).rejects.toBeInstanceOf(TFE);
+  });
+
+  test('transient SUBS failure → throws TransientFetchError (caption path retries)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    let call = 0;
+    const run = vi.fn(async () => {
+      call += 1;
+      // call 1 = info (captions present → a track is selected); call 2 = subs (transient 5xx).
+      if (call === 1) return { code: 0, stdout: infoJson(), stderr: '' };
+      return { code: 1, stdout: '', stderr: 'ERROR: HTTP Error 503' };
+    });
+    // Same dynamic-import pattern as the -J transient test so instanceof works under resetModules.
     const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
     const { TransientFetchError: TFE } = await import('../../src/sources/types.js');
     await expect(fetchYoutubeTrack('dQw4w9WgXcQ', run)).rejects.toBeInstanceOf(TFE);
