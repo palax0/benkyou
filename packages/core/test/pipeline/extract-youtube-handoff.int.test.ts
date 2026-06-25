@@ -2,14 +2,10 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { createMigratedTestDatabase, type TestDatabase } from '../db-harness/helpers';
 import postgres from 'postgres';
 
-// PoToken capability ON for these tests.
+// PoToken capability ON for these tests (docker default + provider URL → backend enabled).
 vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://sidecar:4416');
 
-// Replace the youtube adapter with a fetcher we control (no network, no real session).
-vi.mock('../../src/sources/youtube-session.js', async (orig) => ({
-  ...(await orig<typeof import('../../src/sources/youtube-session.js')>()),
-  // isPotokenEnabled reads env at call time; keep the real impl (stubbed env → true).
-}));
+// (the youtube-session vi.mock block is deleted — that module no longer gates Layer-2 handoff)
 
 describe('extract → YouTube Whisper handoff', () => {
   let db: TestDatabase; let sql: postgres.Sql;

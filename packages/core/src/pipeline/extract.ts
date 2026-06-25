@@ -10,7 +10,7 @@ import { setTranscriptStatus } from './transcribe-store';
 import { getBoss, enqueueTranscribe } from '../queue';
 import { getBilibiliSessdata } from '../sources/platform-credentials';
 import { parseYoutubeVideoId } from '../sources/youtube';
-import { isPotokenEnabled } from '../sources/youtube-session';
+import { isYoutubeBackendEnabled, isYoutubeAudioEnabled } from '../sources/ytdlp';
 import type { StageOutcome } from './state';
 
 // A media item is transcribe-eligible when it carries a downloadable audio/video source
@@ -72,11 +72,11 @@ async function runMediaHandoff(item: {
 // page HTML). Bilibili is excluded — parseYoutubeVideoId returns null for it.
 export function isYoutubeWhisperHandoff(
   item: { contentType: string; transcriptStatus: string; url: string; videoDuration: number | null },
-  potokenEnabled: boolean,
+  audioHandoffEnabled: boolean,
 ): boolean {
   return item.contentType === 'video'
     && item.transcriptStatus === 'unavailable'
-    && potokenEnabled
+    && audioHandoffEnabled
     && item.videoDuration != null
     && parseYoutubeVideoId(item.url) != null;
 }
@@ -161,7 +161,7 @@ export async function extractItem(itemId: string): Promise<StageOutcome | void> 
       url: item.url,
       videoDuration: result.videoDuration ?? null,
     },
-    isPotokenEnabled(),
+    isYoutubeBackendEnabled() && isYoutubeAudioEnabled(),
   )) {
     // Overwrite the just-written 'unavailable' with pending/needs_confirmation/skipped_*.
     return applyTranscribePolicy({ id: itemId, sourceId: item.sourceId }, result.videoDuration!);
