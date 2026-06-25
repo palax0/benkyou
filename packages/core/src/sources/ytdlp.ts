@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { env } from '../config/env';
-import type { RawCue } from './youtube';
+import { TransientFetchError } from './types';
+import type { RawCue, RawSubtitleTrack } from './youtube';
 
 export interface Json3Seg {
   utf8?: string;
@@ -165,4 +169,63 @@ export function isYoutubeBackendEnabled(): boolean {
 // AUDIO=in-scope (Task 1 spike Probe 3 passed). Consumed by the Layer-2 handoff gate.
 export function isYoutubeAudioEnabled(): boolean {
   return true;
+}
+
+const DEGRADED: RawSubtitleTrack = { durationSeconds: null, title: null, cues: [] };
+
+// Caption path (spec §4.1/§7). GATE FIRST: when the backend is off, degrade WITHOUT
+// spawning (the §5 hard gate — serverless extract must never attempt a subprocess).
+// transient → throw (pg-boss retries); definitive (incl. 429/bot) → degrade, NEVER throw.
+export async function fetchYoutubeTrack(videoId: string, run: YtdlpRun = runYtdlp): Promise<RawSubtitleTrack> {
+  if (!isYoutubeBackendEnabled()) return { ...DEGRADED };
+  const pot = env.POTOKEN_PROVIDER_URL ?? null;
+
+  const info = await run(buildYtdlpArgs(videoId, { mode: { kind: 'info' }, potProviderBaseUrl: pot }));
+  if (info.code !== 0) {
+    if (classifyYtdlpError(info.code, info.stderr) === 'transient') {
+      throw new TransientFetchError(`yt-dlp -J failed (${info.code}): ${info.stderr.slice(0, 300)}`);
+    }
+    console.warn(`[youtube] ${videoId} degraded: yt-dlp -J ${info.stderr.slice(0, 200)}`);
+    return { ...DEGRADED };
+  }
+
+  let meta: YtdlpInfo;
+  try {
+    meta = JSON.parse(info.stdout) as YtdlpInfo;
+  } catch {
+    console.warn(`[youtube] ${videoId} degraded: unparseable -J output`);
+    return { ...DEGRADED };
+  }
+
+  const durationSeconds = typeof meta.duration === 'number' ? meta.duration : null;
+  const title = meta.title ?? null;
+  const sel = selectCaptionTrack(meta);
+  if (!sel) return { durationSeconds, title, cues: [] }; // no captions → Layer 2 (§4.2)
+
+  const dir = await mkdtemp(join(tmpdir(), 'benkyou-ytsub-'));
+  try {
+    const subs = await run(
+      buildYtdlpArgs(videoId, {
+        mode: { kind: 'subs', lang: sel.lang, outTemplate: join(dir, 'sub.%(ext)s') },
+        potProviderBaseUrl: pot,
+      }),
+    );
+    if (subs.code !== 0) {
+      if (classifyYtdlpError(subs.code, subs.stderr) === 'transient') {
+        throw new TransientFetchError(`yt-dlp subs failed (${subs.code}): ${subs.stderr.slice(0, 300)}`);
+      }
+      console.warn(`[youtube] ${videoId} degraded: yt-dlp subs ${subs.stderr.slice(0, 200)}`);
+      return { durationSeconds, title, cues: [] };
+    }
+    const files = await readdir(dir);
+    const json3 = files.find((f) => f.endsWith('.json3'));
+    if (!json3) {
+      console.warn(`[youtube] ${videoId} degraded: no json3 written`);
+      return { durationSeconds, title, cues: [] };
+    }
+    const cues = parseJson3Cues(JSON.parse(await readFile(join(dir, json3), 'utf8')) as { events?: Json3Event[] });
+    return { durationSeconds, title, cues };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }

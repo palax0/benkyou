@@ -185,3 +185,72 @@ describe('isYoutubeBackendEnabled / isYoutubeAudioEnabled (gate; SIDECAR=drop fo
     expect(isYoutubeAudioEnabled()).toBe(true);
   });
 });
+
+const SUBS_OK = JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'hi' }] }] });
+function infoJson(over: Record<string, unknown> = {}): string {
+  return JSON.stringify({ title: 'T', duration: 120, subtitles: { en: [{ ext: 'json3' }] }, ...over });
+}
+
+describe('fetchYoutubeTrack', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  // The backend-off gate writes a json3 file the wrapper reads; we fake `run` to create it.
+  test('backend OFF → degraded track WITHOUT invoking run (the §5 hard gate)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'serverless'); // off
+    const run = vi.fn();
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const track = await fetchYoutubeTrack('dQw4w9WgXcQ', run as never);
+    expect(run).not.toHaveBeenCalled();
+    expect(track).toEqual({ durationSeconds: null, title: null, cues: [] });
+  });
+
+  test('transient -J failure → throws TransientFetchError (caption path retries)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'ERROR: HTTP Error 503' }));
+    // Dynamic import after resetModules: both fetchYoutubeTrack and TransientFetchError must
+    // come from the same fresh module instance so instanceof resolves to the same class.
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const { TransientFetchError: TFE } = await import('../../src/sources/types.js');
+    await expect(fetchYoutubeTrack('dQw4w9WgXcQ', run)).rejects.toBeInstanceOf(TFE);
+  });
+
+  test('definitive -J failure (429/bot) → degrades, never throws (the §7 crux)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'ERROR: HTTP Error 429 automated queries' }));
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const track = await fetchYoutubeTrack('dQw4w9WgXcQ', run);
+    expect(track).toEqual({ durationSeconds: null, title: null, cues: [] });
+  });
+
+  test('no captions → degraded WITH duration/title (Layer-2 can fire on known duration)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    const run = vi.fn(async () => ({ code: 0, stdout: infoJson({ subtitles: {}, automatic_captions: {} }), stderr: '' }));
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const track = await fetchYoutubeTrack('dQw4w9WgXcQ', run);
+    expect(track).toEqual({ durationSeconds: 120, title: 'T', cues: [] });
+    expect(run).toHaveBeenCalledTimes(1); // info only; no subs download
+  });
+
+  test('captions present → info + subs download → parsed cues', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    let call = 0;
+    const run = vi.fn(async (args: string[]) => {
+      call += 1;
+      if (call === 1) return { code: 0, stdout: infoJson(), stderr: '' };
+      // subs call: write a json3 file into the -o directory so the wrapper can read it.
+      const i = args.indexOf('-o');
+      const tmpl = args[i + 1]!; // .../sub.%(ext)s
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(tmpl.replace('%(ext)s', 'en.json3'), SUBS_OK, 'utf8');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const track = await fetchYoutubeTrack('dQw4w9WgXcQ', run);
+    expect(track.durationSeconds).toBe(120);
+    expect(track.title).toBe('T');
+    expect(track.cues).toEqual([{ start: 0, end: 1, text: 'hi' }]);
+  });
+});
