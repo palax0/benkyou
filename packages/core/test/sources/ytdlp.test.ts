@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { buildYtdlpArgs, classifyYtdlpError, parseJson3Cues, selectCaptionTrack } from '../../src/sources/ytdlp.js';
 
 describe('parseJson3Cues', () => {
@@ -151,5 +151,37 @@ describe('buildYtdlpArgs', () => {
   test('rejects a non-canonical videoId (no shell injection via the URL)', () => {
     expect(() => buildYtdlpArgs('; rm -rf /', { mode: { kind: 'info' } })).toThrow(/non-canonical/);
     expect(() => buildYtdlpArgs('dQw4w9WgXcQ&malicious', { mode: { kind: 'info' } })).toThrow(/non-canonical/);
+  });
+});
+
+describe('isYoutubeBackendEnabled / isYoutubeAudioEnabled (gate; SIDECAR=drop form)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  test('docker mode → enabled', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker');
+    const { isYoutubeBackendEnabled } = await import('../../src/sources/ytdlp.js');
+    expect(isYoutubeBackendEnabled()).toBe(true);
+  });
+
+  test('serverless → disabled (no subprocess available)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'serverless');
+    const { isYoutubeBackendEnabled } = await import('../../src/sources/ytdlp.js');
+    expect(isYoutubeBackendEnabled()).toBe(false);
+  });
+
+  test('docker mode with POTOKEN_PROVIDER_URL unset → still enabled (drop form ignores POTOKEN)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker');
+    // POTOKEN_PROVIDER_URL intentionally left unset — drop form does not read it
+    const { isYoutubeBackendEnabled } = await import('../../src/sources/ytdlp.js');
+    expect(isYoutubeBackendEnabled()).toBe(true);
+  });
+
+  test('isYoutubeAudioEnabled always returns true (AUDIO=in-scope, Probe 3 passed)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker');
+    const { isYoutubeAudioEnabled } = await import('../../src/sources/ytdlp.js');
+    expect(isYoutubeAudioEnabled()).toBe(true);
   });
 });

@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import { env } from '../config/env';
 import type { RawCue } from './youtube';
 
 export interface Json3Seg {
@@ -130,4 +132,37 @@ export function buildYtdlpArgs(videoId: string, opts: YtdlpArgsOpts): string[] {
   }
   args.push(url);
   return args;
+}
+
+export interface YtdlpResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+export type YtdlpRun = (args: string[]) => Promise<YtdlpResult>;
+
+// Production runner: spawn with an arg ARRAY (no shell, spec §2). Resolves with the
+// exit code + captured streams (never rejects on nonzero — callers classify the code);
+// rejects only when the binary itself can't start (ENOENT).
+export const runYtdlp: YtdlpRun = (args) =>
+  new Promise((resolve, reject) => {
+    const proc = spawn('yt-dlp', args);
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d: Buffer) => { stdout += d; });
+    proc.stderr.on('data', (d: Buffer) => { stderr += d; });
+    proc.on('error', reject);
+    proc.on('close', (code: number | null) => resolve({ code: code ?? -1, stdout, stderr }));
+  });
+
+// Single capability chokepoint (spec §5/§10). Serverless has no subprocess, so it is
+// always off. SIDECAR=drop (Task 1 spike): plain yt-dlp reaches YouTube with no PoToken
+// sidecar, so docker mode is enabled unconditionally — POTOKEN_PROVIDER_URL is not read.
+export function isYoutubeBackendEnabled(): boolean {
+  return env.DEPLOY_MODE !== 'serverless';
+}
+
+// AUDIO=in-scope (Task 1 spike Probe 3 passed). Consumed by the Layer-2 handoff gate.
+export function isYoutubeAudioEnabled(): boolean {
+  return true;
 }
