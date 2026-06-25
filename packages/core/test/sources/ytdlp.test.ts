@@ -269,3 +269,34 @@ describe('fetchYoutubeTrack', () => {
     expect(track.cues).toEqual([{ start: 0, end: 1, text: 'hi' }]);
   });
 });
+
+describe('downloadYoutubeAudio', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  test('writes bestaudio to a tmp dir; returns its path; cleanup removes the dir', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    const run = vi.fn(async (args: string[]) => {
+      const i = args.indexOf('-o');
+      const tmpl = args[i + 1]!; // .../audio.%(ext)s
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(tmpl.replace('%(ext)s', 'webm'), 'AUDIOBYTES', 'utf8');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const { downloadYoutubeAudio } = await import('../../src/sources/ytdlp.js');
+    const { path, cleanup } = await downloadYoutubeAudio('dQw4w9WgXcQ', run);
+    const { readFile, access } = await import('node:fs/promises');
+    expect(await readFile(path, 'utf8')).toBe('AUDIOBYTES');
+    await cleanup();
+    await expect(access(path)).rejects.toBeTruthy(); // dir gone
+  });
+
+  test('nonzero exit → throws and cleans up (transcribe degrades)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'ERROR: boom' }));
+    const { downloadYoutubeAudio } = await import('../../src/sources/ytdlp.js');
+    await expect(downloadYoutubeAudio('dQw4w9WgXcQ', run)).rejects.toThrow(/audio download failed/);
+  });
+});

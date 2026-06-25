@@ -171,6 +171,31 @@ export function isYoutubeAudioEnabled(): boolean {
   return true;
 }
 
+// Audio path (spec §4.2). Under SABR there is NO audio URL — yt-dlp fetches bestaudio
+// bytes to worker tmp. Any failure throws; transcribe's onFail degrades to 'unavailable'
+// regardless (M2b), so no definitive/transient split here (spec §7).
+export async function downloadYoutubeAudio(
+  videoId: string,
+  run: YtdlpRun = runYtdlp,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const pot = env.POTOKEN_PROVIDER_URL ?? null;
+  const dir = await mkdtemp(join(tmpdir(), 'benkyou-ytaudio-'));
+  const cleanup = async (): Promise<void> => { await rm(dir, { recursive: true, force: true }); };
+  try {
+    const res = await run(
+      buildYtdlpArgs(videoId, { mode: { kind: 'audio', outTemplate: join(dir, 'audio.%(ext)s') }, potProviderBaseUrl: pot }),
+    );
+    if (res.code !== 0) throw new Error(`yt-dlp audio download failed (${res.code}): ${res.stderr.slice(0, 500)}`);
+    const files = await readdir(dir);
+    const audio = files.find((f) => f.startsWith('audio.'));
+    if (!audio) throw new Error('yt-dlp produced no audio file');
+    return { path: join(dir, audio), cleanup };
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
+}
+
 const DEGRADED: RawSubtitleTrack = { durationSeconds: null, title: null, cues: [] };
 
 // Caption path (spec §4.1/§7). GATE FIRST: when the backend is off, degrade WITHOUT
