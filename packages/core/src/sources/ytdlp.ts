@@ -9,6 +9,15 @@ export interface Json3Event {
   segs?: Json3Seg[];
 }
 
+export interface YtdlpInfo {
+  title?: string | null;
+  duration?: number | null;
+  subtitles?: Record<string, unknown[]>;
+  automatic_captions?: Record<string, unknown[]>;
+}
+
+export type CaptionSelection = { lang: string; kind: 'manual' | 'auto' } | null;
+
 // json3: events[].segs[].utf8 joined per event; start = tStartMs/1000,
 // end = (tStartMs + dDurationMs)/1000; empty/whitespace cues dropped (spec §4.1).
 export function parseJson3Cues(json: { events?: Json3Event[] }): RawCue[] {
@@ -54,4 +63,24 @@ export function classifyYtdlpError(_exitCode: number, stderr: string): 'transien
   if (DEFINITIVE_PATTERNS.some((r) => r.test(stderr))) return 'definitive';
   if (TRANSIENT_PATTERNS.some((r) => r.test(stderr))) return 'transient';
   return 'definitive'; // unknown nonzero → degrade-and-continue, never risk failed (spec §7)
+}
+
+// Bilingual user (zh/en); fall back to whatever the video offers. Translated-caption
+// filtering is out of scope — downstream embed/score is language-agnostic (spec §4.1).
+export const CAPTION_LANG_PREFS = ['zh-Hans', 'zh-Hant', 'zh', 'en'];
+
+function pickLang(map: Record<string, unknown[]> | undefined, prefs: string[]): string | null {
+  const langs = Object.keys(map ?? {}).filter((l) => (map![l]?.length ?? 0) > 0);
+  if (langs.length === 0) return null;
+  for (const p of prefs) if (langs.includes(p)) return p;
+  return langs[0]!;
+}
+
+// Preference: manual → auto → none (spec §4.1; auto-generated ASR captions accepted).
+export function selectCaptionTrack(info: YtdlpInfo, prefs: string[] = CAPTION_LANG_PREFS): CaptionSelection {
+  const manual = pickLang(info.subtitles, prefs);
+  if (manual) return { lang: manual, kind: 'manual' };
+  const auto = pickLang(info.automatic_captions, prefs);
+  if (auto) return { lang: auto, kind: 'auto' };
+  return null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { classifyYtdlpError, parseJson3Cues } from '../../src/sources/ytdlp.js';
+import { classifyYtdlpError, parseJson3Cues, selectCaptionTrack } from '../../src/sources/ytdlp.js';
 
 describe('parseJson3Cues', () => {
   test('joins multi-seg events; start/end in seconds', () => {
@@ -77,5 +77,39 @@ describe('classifyYtdlpError', () => {
     expect(
       classifyYtdlpError(1, 'ERROR: HTTP Error 429: Too Many Requests. Unable to download webpage'),
     ).toBe('definitive');
+  });
+});
+
+describe('selectCaptionTrack', () => {
+  const track = [{ ext: 'json3', url: 'https://x' }];
+
+  test('manual subs preferred over auto', () => {
+    expect(selectCaptionTrack({ subtitles: { en: track }, automatic_captions: { en: track } }))
+      .toEqual({ lang: 'en', kind: 'manual' });
+  });
+
+  test('falls back to auto when no manual subs', () => {
+    expect(selectCaptionTrack({ subtitles: {}, automatic_captions: { en: track } }))
+      .toEqual({ lang: 'en', kind: 'auto' });
+  });
+
+  test('honours preference order within a map', () => {
+    expect(selectCaptionTrack({ subtitles: { en: track, 'zh-Hans': track } }, ['zh-Hans', 'en']))
+      .toEqual({ lang: 'zh-Hans', kind: 'manual' });
+  });
+
+  test('no preference match → first available language', () => {
+    expect(selectCaptionTrack({ subtitles: { de: track } }, ['en']))
+      .toEqual({ lang: 'de', kind: 'manual' });
+  });
+
+  test('empty track lists are ignored', () => {
+    expect(selectCaptionTrack({ subtitles: { en: [] }, automatic_captions: { fr: track } }))
+      .toEqual({ lang: 'fr', kind: 'auto' });
+  });
+
+  test('no captions anywhere → null', () => {
+    expect(selectCaptionTrack({ subtitles: {}, automatic_captions: {} })).toBeNull();
+    expect(selectCaptionTrack({})).toBeNull();
   });
 });
