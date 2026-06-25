@@ -2,6 +2,7 @@
   "name": "benkyou",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.3.0",
   "engines": { "node": ">=22.0.0" },
