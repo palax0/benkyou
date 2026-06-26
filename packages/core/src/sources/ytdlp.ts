@@ -251,8 +251,16 @@ export async function fetchYoutubeTrack(videoId: string, run: YtdlpRun = runYtdl
       console.warn(`[youtube] ${videoId} degraded: no json3 written`);
       return { durationSeconds, title, cues: [] };
     }
-    const cues = parseJson3Cues(JSON.parse(await readFile(join(dir, json3), 'utf8')) as { events?: Json3Event[] });
-    return { durationSeconds, title, cues };
+    let parsed: { events?: Json3Event[] };
+    try {
+      parsed = JSON.parse(await readFile(join(dir, json3), 'utf8')) as { events?: Json3Event[] };
+    } catch {
+      // Corrupt/truncated json3 → degrade to Layer 2, but keep known meta so the
+      // duration-gated audio handoff still fires (don't collapse to DEGRADED).
+      console.warn(`[youtube] ${videoId} degraded: unparseable json3`);
+      return { durationSeconds, title, cues: [] };
+    }
+    return { durationSeconds, title, cues: parseJson3Cues(parsed) };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

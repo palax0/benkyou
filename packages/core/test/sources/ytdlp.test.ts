@@ -268,6 +268,25 @@ describe('fetchYoutubeTrack', () => {
     expect(track.title).toBe('T');
     expect(track.cues).toEqual([{ start: 0, end: 1, text: 'hi' }]);
   });
+
+  test('corrupt json3 → degrade to Layer 2 but keep meta (duration-gated handoff still fires)', async () => {
+    vi.stubEnv('DEPLOY_MODE', 'docker'); vi.stubEnv('POTOKEN_PROVIDER_URL', 'http://s:4416');
+    let call = 0;
+    const run = vi.fn(async (args: string[]) => {
+      call += 1;
+      if (call === 1) return { code: 0, stdout: infoJson(), stderr: '' };
+      const i = args.indexOf('-o');
+      const tmpl = args[i + 1]!;
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(tmpl.replace('%(ext)s', 'en.json3'), '{ truncated', 'utf8');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const { fetchYoutubeTrack } = await import('../../src/sources/ytdlp.js');
+    const track = await fetchYoutubeTrack('dQw4w9WgXcQ', run);
+    expect(track.durationSeconds).toBe(120);
+    expect(track.title).toBe('T');
+    expect(track.cues).toEqual([]);
+  });
 });
 
 describe('downloadYoutubeAudio', () => {

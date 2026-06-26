@@ -1,5 +1,5 @@
-import { env } from '../config/env';
 import { getPlatformCredential, type PlatformCredentialRow } from './platform-credentials';
+import { isYoutubeBackendEnabled } from './ytdlp';
 
 export interface CredentialStatus {
   bilibili: 'valid' | 'expired' | 'unset';
@@ -20,8 +20,8 @@ export async function getCredentialStatus(): Promise<CredentialStatus> {
   const bili = await getPlatformCredential('bilibili');
   return {
     bilibili: deriveBilibiliStatus(bili, Date.now()),
-    // YouTube auto-refreshes; "off" only when the capability is disabled. Persistent
-    // sidecar failure is surfaced separately in the health panel (Task 9), not here.
-    youtube: env.POTOKEN_PROVIDER_URL ? 'auto' : 'off',
+    // SIDECAR=drop: the yt-dlp backend reflects docker capability, not sidecar presence
+    // (spec §8). "off" only when the backend is disabled (serverless has no subprocess).
+    youtube: isYoutubeBackendEnabled() ? 'auto' : 'off',
   };
 }
