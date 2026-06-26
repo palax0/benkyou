@@ -17,7 +17,11 @@ RUN pnpm build
 FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-RUN apk add --no-cache ffmpeg
+# yt-dlp owns the YouTube extraction surface (spec §2). Pin-and-bump: YouTube can break
+# yt-dlp within days, so a pinned binary in a rarely-rebuilt image can rot — bump this
+# tag on break (spec §10). Do NOT `pip install -U` at container start (reproducibility).
+RUN apk add --no-cache ffmpeg python3 py3-pip \
+  && pip install --no-cache-dir --break-system-packages "yt-dlp==2026.06.09"
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY --from=build /app/apps/worker/src ./apps/worker/src
 COPY --from=build /app/apps/worker/package.json ./apps/worker/

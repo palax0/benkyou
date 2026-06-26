@@ -6,7 +6,7 @@ import { downloadToTmp, probeRemoteDurationSec } from './media-probe';
 import { transcribeRecorded } from '../ai/whisper';
 import { buildWhisperConfig, getUserSettings } from '../settings';
 import { parseYoutubeVideoId } from '../sources/youtube';
-import { resolveYoutubeAudioUrl } from '../sources/youtube-session';
+import { downloadYoutubeAudio } from '../sources/ytdlp';
 
 const WINDOW_SEC = 600;   // 10-min chunks keep each upload under the 25 MB Whisper limit
 const OVERLAP_SEC = 5;
@@ -70,16 +70,12 @@ function ffmpegSliceToOgg(srcPath: string, start: number, end: number): Promise<
   });
 }
 
-// YouTube audio-stream URLs are ephemeral (§4) — never stored as media_url; resolved
-// fresh here at download time. Everything else uses media_url ?? url verbatim.
-export async function resolveDownloadSource(
-  item: { mediaUrl: string | null; url: string },
-  resolver: (videoId: string) => Promise<string> = resolveYoutubeAudioUrl,
-): Promise<string> {
-  if (item.mediaUrl) return item.mediaUrl;
-  const videoId = parseYoutubeVideoId(item.url);
-  if (videoId) return resolver(videoId);
-  return item.url;
+// Returns the videoId when this item must be fetched via yt-dlp (SABR — no URL to hand
+// to Whisper, spec §4.2): a YouTube watch URL with no direct mediaUrl. Otherwise null
+// (podcasts / direct pastes carry a usable mediaUrl → downloadToTmp).
+export function isYoutubeTranscribeSource(item: { mediaUrl: string | null; url: string }): string | null {
+  if (item.mediaUrl) return null;
+  return parseYoutubeVideoId(item.url);
 }
 
 export async function transcribeItem(
@@ -89,11 +85,25 @@ export async function transcribeItem(
   if (!settings) throw new Error('user_settings not initialized');
   const cfg = buildWhisperConfig(settings);
 
-  const source = await resolveDownloadSource(item);
-  const durationSec = item.durationSec ?? (await probeRemoteDurationSec(source)) ?? 0;
-  if (durationSec <= 0) throw new Error('Could not resolve audio duration for transcription');
+  const videoId = isYoutubeTranscribeSource(item);
+  let path: string;
+  let cleanup: () => Promise<void>;
+  let durationSec: number;
 
-  const { path, cleanup } = await downloadToTmp(source);
+  if (videoId) {
+    // YouTube: yt-dlp fetches bestaudio bytes to tmp. Duration is already known from
+    // extract (yt-dlp -J populated video_duration; the Layer-2 gate requires it != null),
+    // so no remote probe — that path would ffprobe the watch page (the §4.2 footgun).
+    durationSec = item.durationSec ?? 0;
+    if (durationSec <= 0) throw new Error('Could not resolve audio duration for transcription');
+    ({ path, cleanup } = await downloadYoutubeAudio(videoId));
+  } else {
+    const source = item.mediaUrl ?? item.url;
+    durationSec = item.durationSec ?? (await probeRemoteDurationSec(source)) ?? 0;
+    if (durationSec <= 0) throw new Error('Could not resolve audio duration for transcription');
+    ({ path, cleanup } = await downloadToTmp(source));
+  }
+
   try {
     const plan = planChunks(durationSec);
     const limit = pLimit(WHISPER_CONCURRENCY);

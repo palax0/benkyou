@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { Utils } from 'youtubei.js';
 import {
   parseYoutubeVideoId,
   createYoutubeAdapter,
-  isDefinitiveYoutubeError,
-  INNERTUBE_OPTIONS,
   type RawSubtitleTrack,
 } from '../../src/sources/youtube.js';
 import { TransientFetchError } from '../../src/sources/types.js';
@@ -112,29 +109,5 @@ describe('youtube adapter extract', () => {
   test('fetchItems throws (youtube is adhoc-only in M2a)', async () => {
     const adapter = createYoutubeAdapter(async () => null);
     await expect(adapter.fetchItems({})).rejects.toThrow(/adhoc/);
-  });
-});
-
-describe('INNERTUBE_OPTIONS', () => {
-  // Regression guard: retrieve_player:false makes YouTube report some playable,
-  // captioned videos as playability=UNPLAYABLE ("Video unavailable / The page needs
-  // to be reloaded"), which hides the caption tracks entirely and degrades them to
-  // 'unavailable'. The player must be retrieved for playability to resolve to OK.
-  // Do NOT set this back to false to "skip the handshake".
-  test('retrieves the player so playability resolves correctly', () => {
-    expect(INNERTUBE_OPTIONS.retrieve_player).toBe(true);
-  });
-});
-
-describe('isDefinitiveYoutubeError', () => {
-  test('youtubei.js content errors (unavailable/private/removed) are definitive → degrade', () => {
-    expect(isDefinitiveYoutubeError(new Utils.InnertubeError('This video is unavailable'))).toBe(true);
-    expect(isDefinitiveYoutubeError(new Utils.PlayerError('decipher failed'))).toBe(true);
-  });
-
-  test('network / unknown errors are NOT definitive → transient retry', () => {
-    expect(isDefinitiveYoutubeError(new TypeError('fetch failed'))).toBe(false);
-    expect(isDefinitiveYoutubeError(new Error('ETIMEDOUT'))).toBe(false);
-    expect(isDefinitiveYoutubeError('weird')).toBe(false);
   });
 });

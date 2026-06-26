@@ -43,7 +43,6 @@
     "postgres": "^3.4.9",
     "rss-parser": "^3.13.0",
     "turndown": "7.2.4",
-    "youtubei.js": "^17.0.1",
     "zod": "^4.4.0"
   },
   "devDependencies": {

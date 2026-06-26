@@ -23,7 +23,6 @@ services:
     # reached via the `postgres` service name, not the host's published port.
     environment:
       DATABASE_URL: postgres://benkyou:benkyou@postgres:5432/benkyou
-      POTOKEN_PROVIDER_URL: http://potoken-provider:4416
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,15 +37,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://benkyou:benkyou@postgres:5432/benkyou
-      POTOKEN_PROVIDER_URL: http://potoken-provider:4416
     depends_on:
       postgres:
         condition: service_healthy
-
-  potoken-provider:
-    # Pinned anonymous-PoToken provider (bgutil-class). Bump the tag to absorb
-    # anti-bot churn — no Benkyou code change (design §2). docker-mode only.
-    image: brainicism/bgutil-ytdlp-pot-provider:1.1.0
-    restart: unless-stopped
-    expose:
-      - '4416'

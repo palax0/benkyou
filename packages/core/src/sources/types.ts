@@ -53,8 +53,8 @@ export interface ExtractInput {
   // Absent → reader stage disabled (design §5: enabled only when reader_base_url set).
   reader?: { baseUrl: string; apiKey?: string };
   // Per-platform scrape credentials, threaded from platform_credentials by the extract
-  // dispatcher (design §3). Bilibili: SESSDATA cookie. YouTube manages its own token
-  // cache in youtube-session and needs nothing here.
+  // dispatcher (design §3). Bilibili: SESSDATA cookie. YouTube uses yt-dlp subprocess
+  // (spec §3) and needs nothing here.
   credentials?: { bilibiliSessdata?: string };
 }
 

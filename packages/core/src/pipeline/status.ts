@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDbClient, items, sources, aiUsage } from '../db';
 import { env } from '../config/env';
-import { pingPotokenSidecar } from '../sources/potoken-client';
+import { pingPotokenSidecar } from '../sources/potoken-health';
 
 // A source is "failing" once it has missed this many consecutive polls. Tuned to
 // survive a transient blip but surface a genuinely broken feed promptly.
