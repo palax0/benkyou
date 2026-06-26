@@ -46,3 +46,29 @@ export function mapStep(
   if (state === 'failed') return { activeIndex, failed: true, transcriptSub };
   return { activeIndex, failed: false, transcriptSub };
 }
+
+export interface ItemStatusDescriptor {
+  // i18n key under the modal's 'paste.status' namespace.
+  key: 'done' | 'doneNoTranscript' | 'failed' | 'inFlight';
+  // The user-facing pipeline step a failure sits on (only set when key === 'failed').
+  stepKey?: PipelineStep;
+}
+
+/**
+ * Describe an item's terminal/in-flight status for the re-paste modal (spec §4),
+ * reusing the mapStep vocabulary so the failed step name matches the stepper.
+ */
+export function describeItemStatus(
+  state: string,
+  currentStage: string | null,
+  transcriptStatus: string,
+): ItemStatusDescriptor {
+  if (state === 'done') {
+    return transcriptStatus === 'unavailable' ? { key: 'doneNoTranscript' } : { key: 'done' };
+  }
+  if (state === 'failed') {
+    const view = mapStep('failed', currentStage, transcriptStatus, null);
+    return { key: 'failed', stepKey: PIPELINE_STEPS[view.activeIndex] ?? 'extract' };
+  }
+  return { key: 'inFlight' };
+}

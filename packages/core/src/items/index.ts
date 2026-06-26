@@ -4,6 +4,6 @@ export type { FeedItem, ItemDetail, ItemProgress, TodayStats, SourcePipelineStat
 export { buildDeepSummaryPrompt, saveDeepSummary, streamDeepSummaryResponse } from './deep-summary';
 export { pasteUrl } from './paste';
 export type { PasteResult } from './paste';
-export { mapStep, PIPELINE_STEPS } from './pipeline-view';
-export type { PipelineStep, StepView } from './pipeline-view';
+export { mapStep, PIPELINE_STEPS, describeItemStatus } from './pipeline-view';
+export type { PipelineStep, StepView, ItemStatusDescriptor } from './pipeline-view';
 export { deleteItem } from './delete';
