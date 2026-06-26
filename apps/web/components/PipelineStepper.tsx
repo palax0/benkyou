@@ -2,8 +2,6 @@
 
 import { useTranslations } from 'next-intl';
 import { PIPELINE_STEPS, type StepView } from '@benkyou/core/items/pipeline-view';
-import { retryItemAction } from '@/app/(authed)/admin/jobs/actions';
-
 // TranscriptStatus values that have a translation key in the 'item.transcript'
 // namespace. 'skipped_too_long' and 'skipped_serverless' are internal pipeline
 // states with no user-visible label — suppress the sub-label for those.
@@ -16,15 +14,7 @@ function isLabeledTranscriptStatus(s: string | null): s is LabeledTranscriptStat
 
 // Calm-Status dots (DESIGN.md §5): muted+pulse = active, accent = complete,
 // faint = pending, err = failed. No flashing on failed (static err dot).
-export function PipelineStepper({
-  view,
-  lastError,
-  itemId,
-}: {
-  view: StepView;
-  lastError: string | null;
-  itemId: string;
-}) {
+export function PipelineStepper({ view, lastError }: { view: StepView; lastError: string | null }) {
   const t = useTranslations('pipeline');
   const ti = useTranslations('item');
 
@@ -57,19 +47,8 @@ export function PipelineStepper({
         })}
       </ol>
 
-      {view.failed ? (
-        <div className="flex flex-col gap-2">
-          {lastError ? <pre className="whitespace-pre-wrap text-xs text-muted">{lastError}</pre> : null}
-          <form action={retryItemAction}>
-            <input type="hidden" name="itemId" value={itemId} />
-            <button
-              type="submit"
-              className="self-start rounded-md border border-line px-3 py-1 text-sm text-ink"
-            >
-              {t('retry')}
-            </button>
-          </form>
-        </div>
+      {view.failed && lastError ? (
+        <pre className="whitespace-pre-wrap text-xs text-muted">{lastError}</pre>
       ) : null}
     </div>
   );

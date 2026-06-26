@@ -122,7 +122,14 @@
       "skipped_serverless": "Transcription off (serverless)"
     },
     "confirmTranscribe": "Transcribe (~{minutes} min)",
-    "confirming": "Submitting…"
+    "confirming": "Submitting…",
+    "actions": {
+      "resume": "Resume",
+      "reprocess": "Reprocess",
+      "delete": "Delete",
+      "reprocessConfirm": "Re-run the whole pipeline? This re-spends tokens.",
+      "deleteConfirm": "Delete permanently? This can't be undone."
+    }
   },
   "search": {
     "title": "Search",

@@ -122,7 +122,14 @@
       "skipped_serverless": "无服务端转写"
     },
     "confirmTranscribe": "确认转写({minutes} 分钟)",
-    "confirming": "提交中…"
+    "confirming": "提交中…",
+    "actions": {
+      "resume": "从失败步续跑",
+      "reprocess": "从头重跑",
+      "delete": "删除",
+      "reprocessConfirm": "会重跑整条 pipeline,重新消耗 token。确定?",
+      "deleteConfirm": "删除后不可恢复,确定删除?"
+    }
   },
   "search": {
     "title": "搜索",
