@@ -3,6 +3,11 @@ import { getDbClient, items } from '../db';
 import { getBoss, registerQueues, enqueueStage } from '../queue';
 import { STAGE_REQUIRED_STATE, type ItemState, type PerItemStage } from './state';
 
+export interface ReprocessResult {
+  requeued: boolean;
+  reason?: 'not-found' | 'in-flight';
+}
+
 /**
  * Shared tail of retry/reprocess: snapshot the item, reset it to `stage`'s legal
  * front-state, and enqueue that stage. If enqueue throws, restore the snapshot
@@ -49,4 +54,26 @@ export async function resetAndEnqueue(itemId: string, stage: PerItemStage): Prom
       .where(eq(items.id, itemId));
     throw err;
   }
+}
+
+/**
+ * Restart an item from `extract` (re-fetch the source). Only `done` or `failed`
+ * items are reprocessable — rejecting in-flight items prevents double-processing
+ * a live pipeline. extract independently decides whether to hand off to the
+ * Layer-2 transcribe stage, so reprocess needs no transcribe awareness (spec §2).
+ */
+export async function reprocessItem(itemId: string): Promise<ReprocessResult> {
+  const db = getDbClient();
+  const rows = await db
+    .select({ state: items.state })
+    .from(items)
+    .where(eq(items.id, itemId))
+    .limit(1);
+  const item = rows[0];
+  if (!item) return { requeued: false, reason: 'not-found' };
+  if (item.state !== 'done' && item.state !== 'failed') {
+    return { requeued: false, reason: 'in-flight' };
+  }
+  await resetAndEnqueue(itemId, 'extract');
+  return { requeued: true };
 }
