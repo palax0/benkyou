@@ -25,6 +25,8 @@
     "filteredBy": "来源：{name} · {count} 条",
     "clearFilter": "清除",
     "bookmarked": "已收藏",
+    "delete": "删除",
+    "deleteConfirm": "删除后不可恢复,确定删除?",
     "type": {
       "article": "文章",
       "video": "视频",

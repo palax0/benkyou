@@ -25,6 +25,8 @@
     "filteredBy": "Source: {name} · {count} items",
     "clearFilter": "Clear",
     "bookmarked": "Bookmarked",
+    "delete": "Delete",
+    "deleteConfirm": "Delete permanently? This can't be undone.",
     "type": {
       "article": "Article",
       "video": "Video",

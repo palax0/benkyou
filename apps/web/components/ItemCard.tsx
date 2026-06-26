@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import type { FeedItem } from '@benkyou/core/items';
+import { FeedItemDeleteButton } from '@/components/FeedItemDeleteButton';
 import { SourceBadge } from '@/components/SourceBadge';
 import { TranscriptBadge } from '@/components/TranscriptBadge';
 import {
@@ -63,12 +64,15 @@ export async function ItemCard({ item }: { item: FeedItem }) {
             </time>
           </>
         ) : null}
-        {item.bookmarked ? (
-          <span className="ml-auto inline-flex shrink-0 items-center text-accent">
-            <BookmarkIcon width={14} height={14} />
-            <span className="sr-only">{t('bookmarked')}</span>
-          </span>
-        ) : null}
+        <span className="relative z-10 ml-auto flex items-center gap-2">
+          {item.bookmarked ? (
+            <span className="inline-flex shrink-0 items-center text-accent">
+              <BookmarkIcon width={14} height={14} />
+              <span className="sr-only">{t('bookmarked')}</span>
+            </span>
+          ) : null}
+          <FeedItemDeleteButton itemId={item.id} />
+        </span>
       </div>
 
       <h2 className="mt-1.5 font-serif text-lg leading-snug font-semibold break-words text-ink">
