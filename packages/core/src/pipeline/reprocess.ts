@@ -15,8 +15,12 @@ export interface ReprocessResult {
  * (app-level compensation; the main spec §428 deliberately rejected transactional
  * send). A process crash *between* the UPDATE and the send still orphans the item
  * — that residual is what /admin/jobs orphan repair covers (spec §2).
+ *
+ * Returns `false` (no mutation performed) if the item vanished between the
+ * caller's state guard and this read — callers map that to their not-found
+ * result rather than surfacing a 500. Returns `true` once enqueued.
  */
-export async function resetAndEnqueue(itemId: string, stage: PerItemStage): Promise<void> {
+export async function resetAndEnqueue(itemId: string, stage: PerItemStage): Promise<boolean> {
   const db = getDbClient();
   const prior = await db
     .select({
@@ -29,7 +33,7 @@ export async function resetAndEnqueue(itemId: string, stage: PerItemStage): Prom
     .where(eq(items.id, itemId))
     .limit(1);
   const snap = prior[0];
-  if (!snap) throw new Error(`Item not found: ${itemId}`);
+  if (!snap) return false;
 
   const preState: ItemState = STAGE_REQUIRED_STATE[stage];
   await db
@@ -42,18 +46,26 @@ export async function resetAndEnqueue(itemId: string, stage: PerItemStage): Prom
     await registerQueues(boss);
     await enqueueStage(boss, stage, itemId);
   } catch (err) {
-    await db
-      .update(items)
-      .set({
-        state: snap.state,
-        currentStage: snap.currentStage,
-        attempts: snap.attempts,
-        lastError: snap.lastError,
-        updatedAt: new Date(),
-      })
-      .where(eq(items.id, itemId));
+    // Restore so a failed enqueue can't strand the item. If the restore itself
+    // throws, let the original enqueue error propagate (it is the root cause);
+    // the now-stranded item is covered by /admin/jobs orphan repair (spec §428).
+    try {
+      await db
+        .update(items)
+        .set({
+          state: snap.state,
+          currentStage: snap.currentStage,
+          attempts: snap.attempts,
+          lastError: snap.lastError,
+          updatedAt: new Date(),
+        })
+        .where(eq(items.id, itemId));
+    } catch {
+      // swallow restore failure; the original `err` is rethrown below
+    }
     throw err;
   }
+  return true;
 }
 
 /**
@@ -74,6 +86,7 @@ export async function reprocessItem(itemId: string): Promise<ReprocessResult> {
   if (item.state !== 'done' && item.state !== 'failed') {
     return { requeued: false, reason: 'in-flight' };
   }
-  await resetAndEnqueue(itemId, 'extract');
+  // resetAndEnqueue re-reads the row; a concurrent delete in that window yields false.
+  if (!(await resetAndEnqueue(itemId, 'extract'))) return { requeued: false, reason: 'not-found' };
   return { requeued: true };
 }

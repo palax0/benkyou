@@ -20,9 +20,14 @@ describe('POST /api/items/:id/reprocess', () => {
     expect(vi.mocked(reprocessItem)).toHaveBeenCalledWith('item-1');
   });
 
-  test('409 when not requeued', async () => {
+  test('409 when in-flight', async () => {
     vi.mocked(reprocessItem).mockResolvedValue({ requeued: false, reason: 'in-flight' });
     expect((await POST(req, ctx)).status).toBe(409);
+  });
+
+  test('404 when not found', async () => {
+    vi.mocked(reprocessItem).mockResolvedValue({ requeued: false, reason: 'not-found' });
+    expect((await POST(req, ctx)).status).toBe(404);
   });
 
   test('401 when unauthenticated', async () => {

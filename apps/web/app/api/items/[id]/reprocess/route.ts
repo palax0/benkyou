@@ -6,5 +6,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (unauth) return unauth;
   const { id } = await params;
   const result = await reprocessItem(id);
-  return Response.json(result, { status: result.requeued ? 200 : 409 });
+  if (result.requeued) return Response.json(result, { status: 200 });
+  return Response.json(result, { status: result.reason === 'not-found' ? 404 : 409 });
 }

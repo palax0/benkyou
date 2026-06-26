@@ -74,6 +74,10 @@ describe('reprocessItem + re-run absorption', () => {
     });
   });
 
+  test('resetAndEnqueue returns false (no throw) when the item vanished (TOCTOU)', async () => {
+    expect(await reprocess.resetAndEnqueue('00000000-0000-0000-0000-000000000000', 'extract')).toBe(false);
+  });
+
   test('stale extract job is dropped by the state guard (re-run absorption)', async () => {
     // Item already advanced past extract's required pre-state ('pending').
     const id = await seed('rp-stale', 'extracted');

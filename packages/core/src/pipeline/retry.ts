@@ -33,6 +33,7 @@ export async function retryItem(itemId: string): Promise<RetryResult> {
   if (item.state === 'done') return { requeued: false, reason: 'not-retryable' };
   if (!isPerItemStage(item.currentStage)) return { requeued: false, reason: 'no-stage' };
 
-  await resetAndEnqueue(itemId, item.currentStage);
+  // A concurrent delete between the guard above and the re-read yields false.
+  if (!(await resetAndEnqueue(itemId, item.currentStage))) return { requeued: false, reason: 'not-retryable' };
   return { requeued: true };
 }
