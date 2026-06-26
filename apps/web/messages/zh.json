@@ -93,7 +93,17 @@
     "failed": "无法添加该链接",
     "title": "添加链接",
     "aiRequired": "先完成 AI 配置 →",
-    "cancel": "取消"
+    "cancel": "取消",
+    "alreadyImported": "这条已导入过",
+    "view": "查看",
+    "reprocess": "重新处理",
+    "reprocessCost": "将重新消耗 token",
+    "status": {
+      "done": "已完成",
+      "doneNoTranscript": "已完成 · 无字幕",
+      "failed": "处理失败于 {step}",
+      "inFlight": "处理中"
+    }
   },
   "item": {
     "deepSummary": "AI 深度摘要",

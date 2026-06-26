@@ -93,7 +93,17 @@
     "failed": "Couldn't add that link",
     "title": "Add link",
     "aiRequired": "Configure AI first →",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "alreadyImported": "Already imported",
+    "view": "View",
+    "reprocess": "Reprocess",
+    "reprocessCost": "re-spends tokens",
+    "status": {
+      "done": "Done",
+      "doneNoTranscript": "Done · no subtitles",
+      "failed": "Failed at {step}",
+      "inFlight": "Processing"
+    }
   },
   "item": {
     "deepSummary": "AI deep summary",
