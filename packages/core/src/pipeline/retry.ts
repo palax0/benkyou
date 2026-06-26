@@ -1,12 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDbClient, items } from '../db';
-import { getBoss, registerQueues, enqueueStage } from '../queue';
-import {
-  PER_ITEM_STAGES,
-  STAGE_REQUIRED_STATE,
-  type ItemState,
-  type PerItemStage,
-} from './state';
+import { PER_ITEM_STAGES, type PerItemStage } from './state';
+import { resetAndEnqueue } from './reprocess';
 
 export interface RetryResult {
   requeued: boolean;
@@ -18,11 +13,13 @@ function isPerItemStage(s: string | null): s is PerItemStage {
 }
 
 /**
- * Recover a failed or orphaned (in-flight, no queued job) item: reset attempts,
- * restore state to current_stage's required pre-state, re-enqueue current_stage.
- * The same function powers both the "[retry]" (failed) and "[re-enqueue]"
- * (orphan) buttons. Re-running the stage is safe — runItemStage's state guard +
- * the queue's idempotent dedup absorb any double-enqueue (spec §7).
+ * Recover a failed or orphaned (in-flight, no queued job) item: resume from
+ * current_stage. Powers both the "[retry]" (failed) and "[re-enqueue]" (orphan)
+ * buttons. Re-running the stage is absorbed by runItemStage's state guard
+ * (runner.ts:26) under serial execution — a second job reads a state past the
+ * stage's required pre-state and no-ops. Under concurrent workers a duplicate run
+ * is possible but data-safe (embed onConflictDoUpdate, single cluster) and bounded
+ * to wasted tokens; there is NO queue-level singletonKey on stage jobs (spec §2).
  */
 export async function retryItem(itemId: string): Promise<RetryResult> {
   const db = getDbClient();
@@ -36,15 +33,6 @@ export async function retryItem(itemId: string): Promise<RetryResult> {
   if (item.state === 'done') return { requeued: false, reason: 'not-retryable' };
   if (!isPerItemStage(item.currentStage)) return { requeued: false, reason: 'no-stage' };
 
-  const stage = item.currentStage;
-  const preState: ItemState = STAGE_REQUIRED_STATE[stage];
-  await db
-    .update(items)
-    .set({ state: preState, attempts: 0, lastError: null, updatedAt: new Date() })
-    .where(eq(items.id, itemId));
-
-  const boss = await getBoss();
-  await registerQueues(boss);
-  await enqueueStage(boss, stage, itemId);
+  await resetAndEnqueue(itemId, item.currentStage);
   return { requeued: true };
 }
