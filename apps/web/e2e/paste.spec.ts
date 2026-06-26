@@ -28,20 +28,22 @@ test.describe('URL paste', () => {
     await expect(page.getByText(/Current stage|当前阶段/)).toBeVisible();
   });
 
-  test('pasting a duplicate URL jumps to the existing item', async ({ page }) => {
+  test('pasting a duplicate URL shows the already-imported panel', async ({ page }) => {
     // First paste — creates the item.
     await page.getByPlaceholder(/Paste|粘贴/).fill('https://example.com/e2e-dup');
     await page.getByRole('button', { name: /^Add$|^添加$/ }).click();
     await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
     const firstUrl = page.url();
 
-    // Go back to feed.
+    // Back to feed and re-paste the same canonical URL (utm_* stripped).
     await page.goto('/');
     await expect(page.getByPlaceholder(/Paste|粘贴/)).toBeVisible();
-
-    // Second paste — same canonical URL (utm_* stripped by url_hash) → jumps to same item.
     await page.getByPlaceholder(/Paste|粘贴/).fill('https://example.com/e2e-dup?utm_source=x');
     await page.getByRole('button', { name: /^Add$|^添加$/ }).click();
-    await expect(page).toHaveURL(firstUrl); // same id — dup-jump
+
+    // Panel appears instead of navigating; View jumps to the existing item.
+    await expect(page.getByText(/Already imported|这条已导入过/)).toBeVisible();
+    await page.getByRole('button', { name: /^View$|^查看$/ }).click();
+    await expect(page).toHaveURL(firstUrl);
   });
 });

@@ -43,3 +43,25 @@ describe('mapStep', () => {
     expect(v.transcriptSub).toBe('pending');
   });
 });
+
+import { describeItemStatus } from '../../src/items/pipeline-view';
+
+describe('describeItemStatus', () => {
+  test('done + present → done', () => {
+    expect(describeItemStatus('done', null, 'present')).toEqual({ key: 'done' });
+  });
+  test('done + unavailable → doneNoTranscript', () => {
+    expect(describeItemStatus('done', null, 'unavailable')).toEqual({ key: 'doneNoTranscript' });
+  });
+  test('failed → failed + user-facing step from current_stage', () => {
+    expect(describeItemStatus('failed', 'embed', 'na')).toEqual({ key: 'failed', stepKey: 'embed' });
+    expect(describeItemStatus('failed', 'extract', 'na')).toEqual({ key: 'failed', stepKey: 'extract' });
+  });
+  test('failed with null stage falls back to extract', () => {
+    expect(describeItemStatus('failed', null, 'na')).toEqual({ key: 'failed', stepKey: 'extract' });
+  });
+  test('in-flight states → inFlight', () => {
+    expect(describeItemStatus('pending', 'extract', 'na')).toEqual({ key: 'inFlight' });
+    expect(describeItemStatus('scored', 'dedup', 'na')).toEqual({ key: 'inFlight' });
+  });
+});

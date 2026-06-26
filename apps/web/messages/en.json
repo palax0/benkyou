@@ -25,6 +25,8 @@
     "filteredBy": "Source: {name} · {count} items",
     "clearFilter": "Clear",
     "bookmarked": "Bookmarked",
+    "delete": "Delete",
+    "deleteConfirm": "Delete permanently? This can't be undone.",
     "type": {
       "article": "Article",
       "video": "Video",
@@ -93,7 +95,17 @@
     "failed": "Couldn't add that link",
     "title": "Add link",
     "aiRequired": "Configure AI first →",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "alreadyImported": "Already imported",
+    "view": "View",
+    "reprocess": "Reprocess",
+    "reprocessCost": "re-spends tokens",
+    "status": {
+      "done": "Done",
+      "doneNoTranscript": "Done · no subtitles",
+      "failed": "Failed at {step}",
+      "inFlight": "Processing"
+    }
   },
   "item": {
     "deepSummary": "AI deep summary",
@@ -122,7 +134,14 @@
       "skipped_serverless": "Transcription off (serverless)"
     },
     "confirmTranscribe": "Transcribe (~{minutes} min)",
-    "confirming": "Submitting…"
+    "confirming": "Submitting…",
+    "actions": {
+      "resume": "Resume",
+      "reprocess": "Reprocess",
+      "delete": "Delete",
+      "reprocessConfirm": "Re-run the whole pipeline? This re-spends tokens.",
+      "deleteConfirm": "Delete permanently? This can't be undone."
+    }
   },
   "search": {
     "title": "Search",
