@@ -6,3 +6,4 @@ export { pasteUrl } from './paste';
 export type { PasteResult } from './paste';
 export { mapStep, PIPELINE_STEPS } from './pipeline-view';
 export type { PipelineStep, StepView } from './pipeline-view';
+export { deleteItem } from './delete';
