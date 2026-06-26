@@ -52,11 +52,11 @@ The underlying engine supports re-enqueuing from **any** stage (near-zero cost t
 
 ```ts
 // resetAndEnqueue(itemId, stage):
-//   state      = STAGE_REQUIRED_STATE[stage]   // 'extract' → 'pending'
-//   current_stage = stage
-//   attempts   = 0
-//   last_error = null
-//   enqueueStage(boss, stage, itemId)
+//   prior = SELECT state, current_stage, attempts, last_error   // full snapshot for compensation
+//   UPDATE state = STAGE_REQUIRED_STATE[stage],                 // 'extract' → 'pending'
+//          current_stage = stage, attempts = 0, last_error = null
+//   try    { enqueueStage(boss, stage, itemId) }
+//   catch  { UPDATE ...prior ; rethrow }            // restore the snapshot — don't strand the item
 ```
 
 - `retryItem(itemId)` — unchanged behavior: guards (not `done`, `current_stage` is a per-item stage), then `resetAndEnqueue(itemId, current_stage)`. (Now expressed via the shared tail.)
@@ -65,7 +65,9 @@ The underlying engine supports re-enqueuing from **any** stage (near-zero cost t
 **Properties:**
 
 - **Self-healing transcribe handoff.** reprocess only re-runs `extract`; extract independently decides whether to hand off to Layer-2 `transcribe` (YouTube no-caption path). reprocess needs no awareness of transcribe.
-- **Idempotent / no stale rows.** embed uses `onConflictDoUpdate` (`embed.ts:42`); dedup's unique index on `canonical_item` makes re-run reuse the cluster (`dedup.ts`); the old summary/`deep_summary` is overwritten by the new run.
+- **Data idempotency (a re-run never corrupts).** embed `onConflictDoUpdate` (`embed.ts:42`), dedup's unique index on `canonical_item` reuses the cluster (`dedup.ts`), and the old summary/`deep_summary` is overwritten. A duplicate run wastes work but cannot double-write.
+- **No queue-level dedup — state the real guarantee, don't claim "queue dedup".** `enqueueStage` is a plain `boss.send` with **no `singletonKey`** (`packages/core/src/queue/queues.ts:92`), and `runItemStage`'s `getItemState` check (`packages/core/src/queue/runner.ts:26`) is a non-atomic read, not an atomic claim. Under **serial** execution the state guard absorbs a duplicate (a second `extract` job reads `extracted ≠ pending` after the first advanced → no-op). Under **concurrent** workers two `extract` jobs can both pass in `pending` → a duplicated extract, **bounded to wasted tokens** (data-safe per the bullet above). Mitigation chosen: the reprocess button/route is **guarded against re-submit while a request is in flight** (kills the common double-click vector cheaply); the residual concurrent-worker duplicate is accepted for a single-user app. `singletonKey` on the stage job is the available hardening lever, deferred (YAGNI — it touches shared enqueue plumbing). **Correct the inherited overclaim in `retry.ts:25` ("queue dedup") while refactoring.**
+- **Enqueue-failure compensation (no user-visible orphan on the common path).** `resetAndEnqueue` captures the prior `(state, current_stage, attempts, last_error)` snapshot and, if `enqueueStage` throws, restores it and rethrows — so the item **stays in the feed** and the route returns an error instead of leaving a forever-`pending` progress page. This is app-level compensation, **not** transactional `send` (the main spec §428 deliberately rejected transactional send). The residual case — a process crash *between* the state UPDATE and the `send` — still orphans the item, which is exactly what the existing `/admin/jobs` orphan repair covers (§428). `retryItem` inherits the same compensation via the shared helper (tightening its current behavior at `retry.ts:41-48`).
 - **Transient feed exit.** A reprocessed `done` item correctly leaves the feed (`state≠'done'`) until it re-reaches `done` — same as orphan retry, acceptable for single-user.
 - **Cost.** Restart re-spends embed + summary (and possibly Whisper) tokens; metered in `ai_usage`. Acceptable for a manual single-user action; UI gates it behind a confirm (§3).
 
@@ -90,7 +92,7 @@ Both render branches of `apps/web/app/(authed)/items/[id]/page.tsx` get an actio
 - `POST /api/items/:id/retry` → `retryItem(id)` (surfaces the existing capability on the item page; `/admin/jobs` keeps its own retry)
 - `DELETE /api/items/:id` → `deleteItem(id)` (§5)
 
-On reprocess/resume success the client navigates to the progress view (`router.refresh()` / push to `/items/:id`).
+On reprocess/resume success the client navigates to the progress view (`router.refresh()` / push to `/items/:id`). The button disables itself while the request is in flight (the double-submit guard from §2); on a non-2xx response it surfaces an error and does **not** navigate (the item stayed in the feed thanks to the §2 compensation).
 
 ---
 
@@ -103,11 +105,11 @@ The current silent `router.push` on a dedup hit is the worst part of the UX — 
 ```ts
 type PasteResult =
   | { created: string }                                  // new item, pipeline started
-  | { existing: { id: string; state: ItemState;
+  | { existing: { id: string; state: ItemState; currentStage: PerItemStage | null;
                   transcriptStatus: TranscriptStatus; title: string } };
 ```
 
-`pasteUrl` selects those columns on the dedup-hit path (and the lost-insert-race path).
+`pasteUrl` selects those columns on the dedup-hit path (and the lost-insert-race path). `currentStage` is required so `describeItemStatus` can render "处理失败于 {stage}" for a `failed` hit.
 
 **Modal** (`PasteModal.tsx`): on `existing`, render an "already imported" panel instead of closing/navigating:
 
@@ -115,7 +117,7 @@ type PasteResult =
 > 《{title}》 · 状态:{label}
 > [查看] [重新处理]
 
-- `label` from a small `describeItemStatus(state, transcriptStatus)` helper reusing the `mapStep` vocabulary (`packages/core/src/items/pipeline-view.ts`) → i18n key. Examples: 已完成·无字幕 / 处理失败于 {stage} / 处理中。
+- `label` from a small `describeItemStatus(state, currentStage, transcriptStatus)` helper reusing the `mapStep` vocabulary (`packages/core/src/items/pipeline-view.ts`) → i18n key. Examples: 已完成·无字幕 / 处理失败于 {stage} / 处理中。
 - **[重新处理] = restart from extract** (`POST …/reprocess`), then navigate to the item. Re-paste intent is always "redo fresh"; resume stays off the modal (no stage choice in the modal). Shown only when the existing item is `state ∈ {done, failed}` (matching `reprocessItem`'s guard); an in-flight hit shows status + [查看] only.
 - **Token-cost note is inline** next to [重新处理] (no modal-on-modal); the visible status panel is itself the confirmation context.
 
@@ -133,18 +135,20 @@ type PasteResult =
 | `digest_items.item_id` | `CASCADE` |
 | `ai_usage.item_id` | `SET NULL` (token ledger preserved) |
 
-**Compensate for the missing cluster FK (divergence — see §9).** `event_clusters.canonical_item` has **no FK** (it's a bare `uuid` in `0000_initial.sql:31`, despite main spec §355 claiming `references items(id) on delete set null`). So deleting an item would leave `canonical_item` dangling at a nonexistent id. `deleteItem` cleans it in app code, robust for both the current dedup stub (1:1 item↔cluster) and future M3 multi-item clusters:
+**Compensate for the missing cluster FK (divergence — see §9).** `event_clusters.canonical_item` has **no FK** (a bare `uuid` in `0000_initial.sql:31`, despite main spec §355 claiming `references items(id) on delete set null`). Deleting an item would leave `canonical_item` dangling at a nonexistent id. `deleteItem` cleans it **for the current dedup stub only** (1:1 item↔cluster, `dedup.ts`):
 
 ```
--- in a transaction, before/with deleting the item:
-DELETE FROM event_clusters WHERE canonical_item = $id AND item_count <= 1;  -- owning 1:1 cluster
-UPDATE event_clusters SET canonical_item = NULL WHERE canonical_item = $id;  -- future multi-item: re-elect next dedup (spec §516)
+-- in a transaction with the item delete:
+DELETE FROM event_clusters WHERE canonical_item = $id AND item_count <= 1;  -- the item's own 1:1 cluster
+UPDATE event_clusters SET canonical_item = NULL WHERE canonical_item = $id;  -- safety: never leave a dangling canonical pointer
 DELETE FROM items WHERE id = $id;
 ```
 
-(Only items that reached the `dedup` stage own a cluster; pre-dedup `pending`/`failed` items match 0 rows — harmless. `items.cluster_id → event_clusters.id ON DELETE SET NULL` is the reverse direction and irrelevant here.)
+(Only items that reached `dedup` own a cluster; pre-dedup `pending`/`failed` items match 0 rows — harmless. `items.cluster_id → event_clusters.id ON DELETE SET NULL` is the reverse direction, irrelevant here.)
 
-**Mid-flight safety.** Deleting an in-flight item is safe: any queued job runs `runItemStage`, which reads `getItemState` and returns early when the item is gone (`runner.ts:26-27`, `getItemState` → `undefined ≠ required state` → no-op).
+**Explicitly NOT handled — deferred to M3 (real multi-item clustering).** Once clusters hold >1 member, `deleteItem` must additionally (a) **decrement `item_count`** for *any* deleted member (canonical or not), and (b) **synchronously re-elect** a new `canonical_item` when the deleted item was canonical — not lean on "the next dedup pass", which may never run for that cluster. The stub (`dedup.ts`) never produces multi-member clusters, so this is a TODO, not a current correctness gap. The `SET canonical_item = NULL` line above is **only** an anti-dangling safety; it does not maintain `item_count`. Leave a `// M3 TODO` at the cleanup site.
+
+**Mid-flight safety.** Deleting an in-flight item is safe: any queued job runs `runItemStage`, which reads `getItemState` and returns early when the item is gone (`packages/core/src/queue/runner.ts:26-27`, `getItemState` → `undefined ≠ required state` → no-op).
 
 **Surfaces** (both, per request): item detail page + feed row (`apps/web/components/` feed item). Destructive confirm required ("删除后不可恢复"). After delete: navigate back to feed (detail page) / optimistic row removal + `router.refresh()` (feed). Feed-row control is structurally-neutral, `DESIGN-GAP`-marked.
 
@@ -169,10 +173,12 @@ DELETE FROM items WHERE id = $id;
 
 ## 7. Testing (TDD where there's logic)
 
-- `reprocessItem` (int): `done` → `state='pending'`, `current_stage='extract'`, `attempts=0`, `last_error=null`, extract enqueued; `failed` likewise; in-flight rejected; double-call idempotent (queue dedup).
-- `retryItem` unchanged: existing tests stay green after the `resetAndEnqueue` refactor.
-- `deleteItem` (int): item row gone; `item_embeddings` cascade-gone; `digest_items` cascade-gone; `ai_usage` row preserved with `item_id=NULL`; owning 1:1 cluster removed; `event_clusters` with `item_count>1` gets `canonical_item=NULL` (synthetic multi-item fixture).
-- `pasteUrl` (int): dedup hit returns `{ existing: { id, state, transcriptStatus, title } }`; lost-insert-race path same shape.
+- `reprocessItem` (int): `done` → `state='pending'`, `current_stage='extract'`, `attempts=0`, `last_error=null`, extract enqueued; `failed` likewise; in-flight rejected.
+- Re-run absorption (int, the *real* guarantee — not "queue dedup"): after reprocess advances the item to `extracted`, a second/stale `extract` job dropped by `runItemStage`'s state guard (`runner.ts:26`); and a re-run is data-safe (embed `onConflictDoUpdate`, single cluster) — assert no duplicate embedding/cluster rows.
+- Enqueue-failure compensation (int): with `enqueueStage` stubbed to throw, `resetAndEnqueue`/`reprocessItem` rethrows **and** the item's `(state, current_stage, attempts, last_error)` snapshot is restored to its pre-call value (item not stranded) — assert for both a `done` and a `failed` starting item.
+- `retryItem` unchanged: existing tests stay green after the `resetAndEnqueue` refactor (now also covered by the compensation test).
+- `deleteItem` (int): item row gone; `item_embeddings` cascade-gone; `digest_items` cascade-gone; `ai_usage` row preserved with `item_id=NULL`; the item's own 1:1 cluster removed; no dangling `canonical_item` remains. (Multi-member cluster delete is M3-deferred — not implemented, not tested.)
+- `pasteUrl` (int): dedup hit returns `{ existing: { id, state, currentStage, transcriptStatus, title } }`; lost-insert-race path same shape.
 - `describeItemStatus` (unit): state×transcriptStatus → expected i18n key.
 - E2E (Playwright): item-page reprocess transitions to progress view; feed-row delete removes the item; re-paste of an existing URL shows the "already imported" panel.
 
@@ -182,6 +188,7 @@ DELETE FROM items WHERE id = $id;
 
 **New / touched:**
 - core: `packages/core/src/pipeline/reprocess.ts` (+ `resetAndEnqueue` refactor of `retry.ts`), `packages/core/src/items/delete.ts`, extend `packages/core/src/items/paste.ts`, `describeItemStatus` in `packages/core/src/items/pipeline-view.ts`.
+- barrels (server API routes import via these): add `export * from './reprocess'` to `packages/core/src/pipeline/index.ts`; add `deleteItem` and `describeItemStatus` to the `packages/core/src/items/index.ts` exports. (`retryItem` is already re-exported via `export * from './retry'`.)
 - web API: `apps/web/app/api/items/[id]/reprocess/route.ts`, `…/retry/route.ts`, `…/route.ts` (DELETE).
 - web UI: `ItemActions.tsx`, `DeleteButton`/`ReprocessButton`, feed-row delete control; wire into item page, `PasteModal.tsx`, feed; zh/en i18n keys.
 
